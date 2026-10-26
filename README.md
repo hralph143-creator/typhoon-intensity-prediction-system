@@ -1,8 +1,8 @@
 # 云浪智析——基于时空注意力的台风强度预测系统
 
-这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.5.0，第五阶段：SAF-Net 时空注意力融合网络**。
+这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.6.0，第六阶段：科研分析报告、结果导出与系统综合完善**。
 
-已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并使用严格 CMA IFLAG 质量筛选构建未来 6 小时预测样本。系统已实际训练 Persistence、Ridge、LSTM 和 GRU。第四阶段完成 ERA5 U10/V10 基础设施；第五阶段已实现可运行的 SAF-Net、严格数据加载、训练/评估/推理框架和注意力可视化。当前实际 ERA5 时空样本仍为 0，因此正式 SAF-Net 训练与推理被明确禁用，没有生成虚构权重或指标。
+已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并实际训练 Persistence、Ridge、LSTM 和 GRU。第六阶段新增真实数据快照驱动的三类 HTML/PDF 科研报告、统一 XLSX/CSV/PNG 导出、严格公平比较、预测记录查询、日志、SQLite 一致性备份恢复和受控维护。当前实际 ERA5 时空样本仍为 0，因此没有 SAF-Net 正式权重或虚构指标。
 
 ## 技术架构
 
@@ -129,6 +129,10 @@ docs/          项目文档
 - `GET /api/era5/plans`、`POST/GET /api/era5/jobs`：小范围计划和可恢复下载任务
 - `POST /api/era5/import`、`GET /api/era5/files`：NetCDF 质检、归档和追溯
 - `POST /api/era5/samples/build`、`GET /api/era5/samples/statistics`：构建和统计四时次样本
+- `POST/GET /api/reports`：创建、轮询、预览和下载三类科研报告
+- `GET /api/exports/workbook`、`/{kind}.csv`、`/model-comparison.png`：科研成果导出
+- `GET /api/ml/comparison/detail`、`/predictions`：严格模型比较与预测记录筛选
+- `GET /api/system/status`、`/logs`、`/backups`、`/maintenance/preview`：运行与维护
 
 接口返回统一 `success/message/data` 格式；错误返回 `success=false/message/error`。日期统一 UTC，风速 m/s、气压 hPa，原始风速 knots 和机构保留。SQLite WAL 模式允许导入事务期间继续查询旧的已提交数据。
 
@@ -153,7 +157,14 @@ docs/          项目文档
 - [注意力机制说明](docs/safnet-attention.md)
 - [算法烟雾测试](docs/safnet-algorithm-tests.md)
 - [第五阶段验收报告](docs/phase-5-acceptance.md)
+- [科研分析报告](docs/research-reports.md)
+- [数据与结果导出](docs/data-export.md)
+- [模型比较口径](docs/model-comparison.md)
+- [备份与恢复](docs/backup-restore.md)
+- [运行维护](docs/operations.md)
+- [软件功能总览](docs/software-features.md)
+- [第六阶段验收报告](docs/phase-6-acceptance.md)
 
 当前使用 NOAA IBTrACS 中的 CMA 字段，尚未接入独立 CMA TXT 数据源。本机 ERA5 在线授权仍待配置。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 
-原始文件、数据库、任务锁、模型权重、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第五阶段完成后不自动进入第六阶段。
+原始文件、数据库、任务锁、模型权重、生成报告、备份、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第六阶段完成后不自动进入第七阶段。

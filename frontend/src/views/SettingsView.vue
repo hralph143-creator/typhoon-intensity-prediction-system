@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import {onMounted,ref} from 'vue'
+import {ElMessage,ElMessageBox} from 'element-plus'
 import StatusIndicator from '@/components/StatusIndicator.vue'
-import { useSystemStore } from '@/stores/system'
 import IbtracsManager from '@/components/IbtracsManager.vue'
-const system = useSystemStore()
-onMounted(() => system.refresh())
+import {cleanupTemporary,createBackup,deleteBackup,getBackups,getLogs,getMaintenance,getRuntimeStatus,restoreBackup,verifyBackup} from '@/api/system'
+import {useSystemStore} from '@/stores/system'
+const system=useSystemStore(),runtime=ref<any>(),logs=ref<any[]>([]),backups=ref<any[]>([]),maintenance=ref<any>(),level=ref(''),keyword=ref(''),loading=ref(false)
+const size=(n:number)=>n==null?'—':n>1073741824?(n/1073741824).toFixed(2)+' GB':n>1048576?(n/1048576).toFixed(2)+' MB':(n/1024).toFixed(1)+' KB'
+async function refresh(){loading.value=true;try{await system.refresh();[runtime.value,logs.value,backups.value,maintenance.value]=await Promise.all([getRuntimeStatus(),getLogs({level:level.value||undefined,keyword:keyword.value||undefined}),getBackups(),getMaintenance()])}finally{loading.value=false}}
+async function backup(){await createBackup('手动备份');ElMessage.success('备份已创建并校验');await refresh()}
+async function verify(id:string){await verifyBackup(id);ElMessage.success('完整性、校验和与架构版本均通过')}
+async function restore(id:string){await ElMessageBox.confirm('恢复会替换当前数据库；系统将先自动创建安全备份。确认继续？','高风险操作确认',{type:'warning',confirmButtonText:'确认恢复'});await restoreBackup(id);ElMessage.success('数据库已恢复');await refresh()}
+async function remove(id:string){await ElMessageBox.confirm('永久删除这个备份文件？','二次确认',{type:'warning'});await deleteBackup(id);await refresh()}
+async function cleanup(){await ElMessageBox.confirm(`将清理 ${maintenance.value?.file_count??0} 个受控临时文件，不触碰报告、模型和原始数据。`,'二次确认',{type:'warning'});await cleanupTemporary();await refresh()}
+onMounted(refresh)
 </script>
-<template>
-  <section v-loading="system.loading" class="page-stack">
-    <div class="page-heading"><div><h2>运行配置与数据源</h2><p>当前服务运行环境、本地存储位置与真实数据接入任务。</p></div></div>
-    <el-alert v-if="system.error" :title="system.error" type="error" :closable="false" show-icon/>
-    <el-card shadow="never" class="data-card"><template #header><strong>软件与服务</strong></template><el-descriptions :column="2" border><el-descriptions-item label="软件名称">{{system.info?.software_name??'未获取'}}</el-descriptions-item><el-descriptions-item label="品牌名称">{{system.info?.brand??'未获取'}}</el-descriptions-item><el-descriptions-item label="系统版本">{{system.info?.version??'未获取'}}</el-descriptions-item><el-descriptions-item label="后端状态"><StatusIndicator :active="system.backendOnline"/></el-descriptions-item><el-descriptions-item label="Python 版本">{{system.info?.python_version??'未获取'}}</el-descriptions-item><el-descriptions-item label="运行平台">{{system.info?.platform??'未获取'}}</el-descriptions-item><el-descriptions-item label="数据库路径" :span="2">{{system.info?.database_path??'未获取'}}</el-descriptions-item><el-descriptions-item label="数据根目录" :span="2">{{system.info?.data_root??'未获取'}}</el-descriptions-item></el-descriptions></el-card>
-    <el-card shadow="never" class="data-card"><IbtracsManager /></el-card>
-    <el-card shadow="never"><template #header><strong>配置说明</strong></template><p class="body-copy">服务参数可通过项目根目录的 <code>.env</code> 配置；首次使用可复制 <code>.env.example</code>。敏感配置不得提交。CMA 和 ERA5 尚未接入。</p></el-card>
-  </section>
-</template>
+<template><section v-loading="loading" class="page-stack"><div class="page-heading"><div><h2>系统设置与维护</h2><p>真实运行状态、受控日志、SQLite 一致性备份与临时文件清理</p></div><el-button @click="refresh">刷新全部</el-button></div><el-alert v-if="system.error" :title="system.error" type="error" :closable="false" show-icon/>
+<el-card shadow="never"><template #header><strong>运行状态</strong></template><el-descriptions :column="3" border><el-descriptions-item label="后端"><StatusIndicator :active="runtime?.backend==='online'"/></el-descriptions-item><el-descriptions-item label="数据库">{{runtime?.database}}</el-descriptions-item><el-descriptions-item label="版本">{{system.info?.version}}</el-descriptions-item><el-descriptions-item label="数据库占用">{{size(runtime?.database_size)}}</el-descriptions-item><el-descriptions-item label="磁盘可用">{{size(runtime?.disk_free)}}</el-descriptions-item><el-descriptions-item label="报告数">{{runtime?.report_count}}</el-descriptions-item><el-descriptions-item label="数据库路径" :span="3">{{runtime?.paths?.database}}</el-descriptions-item></el-descriptions></el-card>
+<el-card shadow="never"><template #header><strong>运行日志</strong></template><div class="settings-actions"><el-select v-model="level" clearable placeholder="全部级别" style="width:140px"><el-option v-for="x in ['INFO','WARNING','ERROR']" :key="x" :value="x"/></el-select><el-input v-model="keyword" clearable placeholder="关键词" style="width:220px"/><el-button @click="refresh">筛选</el-button><el-link href="/api/system/logs/download">下载日志</el-link></div><div class="log-view"><div v-for="(x,i) in logs" :key="i" class="log-line"><span>{{x.timestamp}} </span><strong>{{x.level}}</strong><span>{{x.message}}</span></div><el-empty v-if="!logs.length" description="暂无匹配日志"/></div></el-card>
+<el-card shadow="never"><template #header><div class="card-header"><strong>数据库备份</strong><el-button type="primary" @click="backup">创建一致性备份</el-button></div></template><el-alert type="warning" :closable="false" title="恢复前会校验文件、架构版本并拒绝运行中任务；随后自动创建恢复前安全备份。"/><el-table :data="backups"><el-table-column prop="backup_name" label="名称"/><el-table-column prop="backup_type" label="类型" width="120"/><el-table-column label="大小" width="110"><template #default="{row}">{{size(row.file_size)}}</template></el-table-column><el-table-column prop="schema_version" label="架构" width="80"/><el-table-column prop="created_at" label="创建时间" width="185"/><el-table-column label="操作" width="230"><template #default="{row}"><el-button link @click="verify(row.id)">校验</el-button><el-button link type="warning" @click="restore(row.id)">恢复</el-button><el-button link type="danger" @click="remove(row.id)">删除</el-button></template></el-table-column></el-table></el-card>
+<el-card shadow="never"><template #header><strong>临时文件维护</strong></template><p class="body-copy">仅扫描固定缓存目录和测试临时目录：{{maintenance?.file_count??0}} 个文件，{{size(maintenance?.total_bytes)}}</p><el-button type="danger" plain :disabled="!maintenance?.file_count" @click="cleanup">确认清理</el-button></el-card>
+<el-card shadow="never"><IbtracsManager/></el-card></section></template>

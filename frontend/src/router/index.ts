@@ -11,6 +11,7 @@ const router = createRouter({
     { path: 'prediction', component: () => import('@/views/PredictionView.vue'), meta: { title: '强度预测' } },
     { path: 'evaluation', component: () => import('@/views/EvaluationView.vue'), meta: { title: '预测性能评估' } },
     { path: 'experiments', component: () => import('@/views/ExperimentsView.vue'), meta: { title: '实验记录' } },
+    { path: 'reports', component: () => import('@/views/ReportView.vue'), meta: { title: '科研分析报告' } },
     { path: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { title: '系统设置' } },
     { path: 'about', component: () => import('@/views/AboutView.vue'), meta: { title: '关于系统' } },
   ] }, { path: '/:pathMatch(.*)*', redirect: '/' }],

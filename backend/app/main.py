@@ -28,6 +28,8 @@ async def lifespan(_: FastAPI):
     recover_training_jobs()
     from backend.app.services.era5_service import recover_download_jobs
     recover_download_jobs()
+    from backend.app.services.report_service import recover_reports
+    recover_reports()
     logger.info("数据库初始化完成，应用已启动")
     yield
     logger.info("应用已停止")
@@ -36,7 +38,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="云浪智析科研软件后端接口（第四阶段：ERA5 时空样本）",
+    description="云浪智析科研软件后端接口（第六阶段：科研分析与成果导出）",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

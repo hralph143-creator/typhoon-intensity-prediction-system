@@ -103,8 +103,8 @@ def test_migrations_are_versioned_and_repeatable(tmp_path):
     migrate(engine)
     migrate(engine)
     with engine.connect() as connection:
-        assert list(connection.execute(text("SELECT version FROM schema_migrations ORDER BY version")).scalars()) == [1, 2, 3, 4]
-    assert {"data_sources", "system_config", "source_files", "data_import_jobs", "typhoon_events", "typhoon_observations", "training_experiments", "model_artifacts", "evaluation_results", "prediction_records", "era5_files", "era5_download_jobs", "wind_field_samples", "spatiotemporal_samples"} <= set(inspect(engine).get_table_names())
+        assert list(connection.execute(text("SELECT version FROM schema_migrations ORDER BY version")).scalars()) == [1, 2, 3, 4, 5]
+    assert {"data_sources", "system_config", "source_files", "data_import_jobs", "typhoon_events", "typhoon_observations", "training_experiments", "model_artifacts", "evaluation_results", "prediction_records", "era5_files", "era5_download_jobs", "wind_field_samples", "spatiotemporal_samples", "analysis_reports", "system_backups"} <= set(inspect(engine).get_table_names())
     engine.dispose()
 
 

@@ -72,7 +72,7 @@ def main() -> int:
         ("Python 3.12", sys.version_info[:2] == (3, 12), sys.version.split()[0]),
         ("虚拟环境", sys.prefix != sys.base_prefix, sys.prefix),
     ]
-    for name in ("fastapi", "uvicorn", "sqlalchemy", "pydantic", "pydantic_settings", "httpx", "multipart", "numpy", "sklearn", "joblib", "openpyxl", "torch", "cdsapi", "xarray", "netCDF4", "h5netcdf", "h5py"):
+    for name in ("fastapi", "uvicorn", "sqlalchemy", "pydantic", "pydantic_settings", "httpx", "multipart", "numpy", "sklearn", "joblib", "openpyxl", "torch", "cdsapi", "xarray", "netCDF4", "h5netcdf", "h5py", "reportlab", "matplotlib", "pypdf", "pdfplumber"):
         installed = importlib.util.find_spec(name) is not None
         checks.append((f"Python 依赖 {name}", installed, "已安装" if installed else "未安装"))
     try:

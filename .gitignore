@@ -14,6 +14,9 @@ data/*.cancel
 data/raw/*
 data/processed/*
 data/cache/*
+data/reports/*
+data/backups/*
+output/pdf/*.pdf
 !data/**/.gitkeep
 checkpoints/*
 !checkpoints/.gitkeep

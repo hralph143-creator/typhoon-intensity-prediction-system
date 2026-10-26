@@ -8,12 +8,14 @@ def migrate(engine: Engine) -> None:
     from backend.app.models.typhoon import ImportJob, SourceFile, TyphoonEvent, TyphoonObservation
     from backend.app.models.ml import EvaluationResult, ModelArtifact, PredictionRecord, TrainingExperiment
     from backend.app.models.era5 import Era5DownloadJob, Era5File, SpatiotemporalSample, WindFieldSample
+    from backend.app.models.report import AnalysisReport, SystemBackup
 
     migrations = (
         (1, "phase_one_system_metadata", (DataSource.__table__, SystemConfig.__table__)),
         (2, "ibtracs_history_and_import_jobs", (SourceFile.__table__, ImportJob.__table__, TyphoonEvent.__table__, TyphoonObservation.__table__)),
         (3, "historical_intensity_ml", (TrainingExperiment.__table__, ModelArtifact.__table__, EvaluationResult.__table__, PredictionRecord.__table__)),
         (4, "era5_spatiotemporal_samples", (Era5File.__table__, Era5DownloadJob.__table__, WindFieldSample.__table__, SpatiotemporalSample.__table__)),
+        (5, "research_reports_and_backups", (AnalysisReport.__table__, SystemBackup.__table__)),
     )
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"))

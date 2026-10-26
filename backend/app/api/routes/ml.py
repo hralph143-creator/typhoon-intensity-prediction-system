@@ -15,6 +15,7 @@ from backend.app.models.era5 import SpatiotemporalSample
 from backend.app.services.ml_dataset import audit_data, build_samples, dataset_version, split_statistics
 from backend.app.services.ml_training import cancel_experiment, create_experiment, delete_experiment, get_experiment, historical_predict, list_experiments, list_models
 from backend.app.services.safnet_training import predict as safnet_predict, structure_info
+from backend.app.services.analysis_service import comparison_analysis, predictions
 
 router = APIRouter(prefix="/ml", tags=["历史强度预测"])
 
@@ -110,6 +111,15 @@ def comparison():
         test = (model.get("metrics") or {}).get("test", {}).get("overall")
         if test: rows.append({"model_id": model["id"], "experiment_id": model["experiment_id"], "name": model["name"], "model_type": model["model_type"], **test})
     return ok(rows)
+
+
+@router.get("/comparison/detail")
+def comparison_detail(): return ok(comparison_analysis())
+
+
+@router.get("/predictions")
+def prediction_records(model_id:str|None=None,sid:str|None=None,date_from:datetime|None=None,date_to:datetime|None=None,min_abs_error:float|None=Query(None,ge=0),max_abs_error:float|None=Query(None,ge=0),page:int=Query(1,ge=1),page_size:int=Query(50,ge=1,le=200),sort_by:str=Query("forecast_time",pattern="^(forecast_time|absolute_error|predicted_wind)$"),sort_order:str=Query("desc",pattern="^(asc|desc)$")):
+    return ok(predictions(model_id,sid,date_from,date_to,min_abs_error,max_abs_error,page,page_size,sort_by,sort_order))
 
 
 @router.post("/predict")

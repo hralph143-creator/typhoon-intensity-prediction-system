@@ -17,4 +17,8 @@ xarray>=2025.1,<2027
 netCDF4>=1.7,<2
 h5netcdf>=1.6,<2
 h5py>=3.12,<4
+reportlab>=4.2,<5
+matplotlib>=3.9,<4
+pypdf>=5,<7
+pdfplumber>=0.11,<1
 
