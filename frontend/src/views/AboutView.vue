@@ -1,6 +1,6 @@
 <template>
   <section class="page-stack">
-    <div class="page-heading"><div><h2>关于云浪智析</h2><p>面向科研复现的台风强度分析与预测软件。</p></div></div>
+    <div class="page-heading"><h2>关于云浪智析</h2></div>
     <el-card shadow="never" class="data-card">
       <h3>系统定位</h3>
       <p class="body-copy">本系统服务于“云浪智析——数智融合下台风强度演变智能预判平台”项目。当前版本提供 NOAA IBTrACS 真实历史数据、台风档案与轨迹分析，并已完成 Persistence、Ridge、LSTM 和 GRU 的未来6小时 CMA 风速历史回测。时空注意力模型、ERA5 和实时业务预报不在当前范围。</p>

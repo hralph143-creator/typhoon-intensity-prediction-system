@@ -39,7 +39,7 @@ onMounted(async () => {
 
 <template>
   <section class="page-stack">
-    <div class="page-heading"><div><h2>历史台风档案</h2><p>NOAA IBTrACS · 西北太平洋 · 2014—2025 年</p></div><el-button @click="tab = tab === 'archive' ? 'source' : 'archive'">{{ tab === 'archive' ? '数据接入与任务' : '返回历史档案' }}</el-button></div>
+    <div class="page-heading"><h2>历史台风档案</h2><el-button @click="tab = tab === 'archive' ? 'source' : 'archive'">{{ tab === 'archive' ? '数据接入与任务' : '返回历史档案' }}</el-button></div>
     <el-tabs v-model="tab" @tab-change="tab === 'archive' && load()">
       <el-tab-pane label="台风档案" name="archive">
         <el-card shadow="never" class="data-card">
