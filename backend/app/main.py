@@ -24,6 +24,8 @@ async def lifespan(_: FastAPI):
     init_db()
     from backend.app.services.ibtracs_jobs import recover_interrupted_jobs
     recover_interrupted_jobs()
+    from backend.app.services.ml_training import recover_training_jobs
+    recover_training_jobs()
     logger.info("数据库初始化完成，应用已启动")
     yield
     logger.info("应用已停止")

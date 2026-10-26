@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     app_name: str = "基于时空注意力的台风强度预测系统"
     app_brand: str = "云浪智析"
-    app_version: str = "0.2.0"
+    app_version: str = "0.3.0"
     app_env: str = "development"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
@@ -25,10 +25,20 @@ class Settings(BaseSettings):
     upload_max_bytes: int = 512 * 1024 * 1024
     download_timeout: float = 45.0
     download_retries: int = 3
+    training_max_workers: int = 1
+    training_cpu_threads: int = 2
 
     @property
     def raw_data_dir(self) -> Path:
         return PROJECT_ROOT / "data" / "raw" / "ibtracs"
+
+    @property
+    def model_dir(self) -> Path:
+        return PROJECT_ROOT / "checkpoints"
+
+    @property
+    def experiment_dir(self) -> Path:
+        return PROJECT_ROOT / "experiments"
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

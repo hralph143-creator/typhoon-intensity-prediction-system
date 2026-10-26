@@ -86,6 +86,14 @@ a:hover { text-decoration: underline; }
 .quality-text { font-size: 11px; color: #9a753e; }
 .track-type-tag { margin: 2px 4px 2px 0; }
 .el-descriptions__content { overflow-wrap: anywhere; }
+.metric-grid { display:grid; grid-template-columns:repeat(6,minmax(110px,1fr)); gap:12px; }
+.metric-grid > div { background:#f4f8fb; border:1px solid #dce8ef; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:7px; }
+.metric-grid span { color:#667887; font-size:13px; }.metric-grid strong { font-size:22px; color:#245c7a; }
+.training-form,.prediction-form { display:grid; grid-template-columns:repeat(3,minmax(180px,1fr)); gap:0 16px; }
+.split-strip { display:flex; flex-wrap:wrap; gap:10px; margin:4px 0 18px; }.split-strip span { background:#edf5f8; padding:7px 11px; border-radius:6px; color:#365b6e; }
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }.backtest-entry .el-card__body { display:flex; justify-content:space-between; align-items:center; width:100%; }
+.json-block { max-height:260px; overflow:auto; background:#f5f7f9; border-radius:6px; padding:12px; font-size:12px; white-space:pre-wrap; }
+@media(max-width:1000px){.metric-grid{grid-template-columns:repeat(2,1fr)}.training-form,.prediction-form,.chart-grid{grid-template-columns:1fr}}
 @media (max-width: 1180px) {
   .status-grid { grid-template-columns: repeat(2, 1fr); }
   .page-container { padding: 22px 20px 32px; }

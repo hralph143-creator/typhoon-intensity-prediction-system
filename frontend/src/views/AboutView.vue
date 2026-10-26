@@ -3,7 +3,7 @@
     <div class="page-heading"><div><h2>关于云浪智析</h2><p>面向科研复现的台风强度分析与预测软件。</p></div></div>
     <el-card shadow="never" class="data-card">
       <h3>系统定位</h3>
-      <p class="body-copy">本系统服务于“云浪智析——数智融合下台风强度演变智能预判平台”项目。当前版本提供 NOAA IBTrACS 数据下载与导入、2014—2025 年西北太平洋历史台风档案、真实历史路径及多机构强度变化分析。时空注意力模型属于后续研究内容，当前尚无训练或预测结果。</p>
+      <p class="body-copy">本系统服务于“云浪智析——数智融合下台风强度演变智能预判平台”项目。当前版本提供 NOAA IBTrACS 真实历史数据、台风档案与轨迹分析，并已完成 Persistence、Ridge、LSTM 和 GRU 的未来6小时 CMA 风速历史回测。时空注意力模型、ERA5 和实时业务预报不在当前范围。</p>
       <h3>数据来源与接入范围</h3>
       <ul class="source-list">
         <li><strong><a href="https://www.ncei.noaa.gov/products/international-best-track-archive" target="_blank" rel="noopener">NOAA IBTrACS ↗</a></strong><span>国际热带气旋最佳路径档案 · v04r01 · 已提供接入能力</span></li>

@@ -56,6 +56,7 @@ onMounted(load)
     <div class="page-heading"><div><el-button link type="primary" @click="router.push('/history')">← 返回历史档案</el-button><h2 class="detail-title">{{ detail?.name || '台风详情' }} <span>{{ detail?.sid }}</span></h2><p>真实历史观测 · 统一使用 UTC 时间</p></div></div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
     <template v-if="detail">
+      <el-card shadow="never" class="data-card backtest-entry"><div><strong>历史强度回测</strong><p class="muted-note">选择已保存模型和有效起报时刻，预测未来6小时风速。</p></div><el-button type="primary" @click="router.push({path:'/prediction',query:{typhoon_id:detail.id}})">前往历史回测预测</el-button></el-card>
       <el-card shadow="never" class="data-card">
         <el-descriptions :column="3" border>
           <el-descriptions-item label="年份">{{ detail.season }}</el-descriptions-item>

@@ -1,12 +1,12 @@
 # 云浪智析——基于时空注意力的台风强度预测系统
 
-这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.2.0，第二阶段：真实历史数据接入、管理与可视化**。
+这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.3.0，第三阶段：历史强度时序预测与模型评估**。
 
-已接入 NOAA 官方 IBTrACS 西北太平洋历史数据。可查询真实台风档案、历史路径、分机构风速和气压曲线，并管理下载和导入任务。风场、训练、预测和评估模块按后续阶段保留明确空状态。
+已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并使用严格 CMA IFLAG 质量筛选构建未来 6 小时预测样本。系统已实际训练 Persistence、Ridge、LSTM 和 GRU，支持历史回测推理、真实指标比较、实验管理和导出。ERA5 和 SAF-Net 仍未接入。
 
 ## 技术架构
 
-- 后端：Python 3.12、FastAPI、SQLAlchemy、Pydantic、SQLite
+- 后端：Python 3.12、FastAPI、SQLAlchemy、Pydantic、SQLite、PyTorch、scikit-learn
 - 前端：Vue 3、TypeScript、Vite、Element Plus、Pinia、Axios、ECharts、Leaflet
 - 测试：pytest、Vitest、Playwright、本机 Edge 浏览器、TypeScript 类型检查、Vite 生产构建
 
@@ -53,6 +53,21 @@ API 与 CLI 共用处理逻辑和跨进程任务锁。CSV 分块接收、逐行�
 
 2026-10-26 首次真实导入结果：249,153 行原始数据，23,188 条有效观测，366 个保留事件，其中 331 个含 MAIN。详见 [第二阶段验收记录](docs/phase-2-acceptance.md)。这些是当前归档快照统计，不是对全部官方台风数量的业务认定。
 
+## 历史强度回测
+
+主实验仅使用 MAIN 轨迹且 CMA IFLAG 第三位为 O/V 的风速。输入为同一 SID 的 `t-18h、t-12h、t-6h、t`，标签为 `t+6h`；空值、17 kn 特殊编码和不连续窗口不会填零或插值。按台风事件和时间分为 2014—2021 训练、2022—2023 验证、2024 主测试；2025 无符合主轨迹严格窗口的样本，不强行混入。
+
+实际主实验均在同一组 722 个 2024 年样本上评价：
+
+| 模型 | MAE (m/s) | RMSE (m/s) | Bias (m/s) | 相对 Persistence MAE 改善 |
+|---|---:|---:|---:|---:|
+| Persistence | 1.9288 | 3.1267 | 0.2373 | 0.00% |
+| Ridge | 1.6956 | 2.4460 | 0.0706 | 12.09% |
+| LSTM | 1.6075 | 2.3590 | -0.0414 | 16.66% |
+| GRU | 1.6429 | 2.3980 | 0.1093 | 14.83% |
+
+指标与模型文件相互关联，不是页面硬编码。在“模型训练”创建后台任务，在“强度预测”选择历史台风和起报时刻，在“预测性能评估”查看真实测试结果。详见 [第三阶段验收报告](docs/phase-3-acceptance.md)。
+
 ## 自动化测试
 
 ```powershell
@@ -91,6 +106,11 @@ docs/          项目文档
 - `GET /api/typhoons`：过滤、排序与分页
 - `GET /api/typhoons/statistics`：按明确口径统计
 - `GET /api/typhoons/{id}`、`/track`、`/intensity`、`/observations`：档案、路径、曲线与原始观测
+- `GET /api/ml/audit`、`/samples/statistics`：训练前真实审计与分组
+- `POST/GET /api/ml/experiments`：训练任务与实验查询、取消和删除
+- `GET /api/ml/models`、`/comparison`：已保存模型与公平指标比较
+- `POST /api/ml/predict`：调用真实模型执行历史回测
+- `GET /api/ml/export/experiments`：导出 CSV 或 Excel 实验记录
 
 接口返回统一 `success/message/data` 格式；错误返回 `success=false/message/error`。日期统一 UTC，风速 m/s、气压 hPa，原始风速 knots 和机构保留。SQLite WAL 模式允许导入事务期间继续查询旧的已提交数据。
 
@@ -100,6 +120,13 @@ docs/          项目文档
 - [字段与清洗规则](docs/data-fields.md)
 - [下载和导入说明](docs/data-import.md)
 - [第二阶段验收记录](docs/phase-2-acceptance.md)
+- [训练数据构建](docs/training-data.md)
+- [第三阶段数据审计](docs/phase-3-data-audit.md)
+- [模型设计](docs/model-design.md)
+- [模型训练](docs/model-training.md)
+- [模型评价](docs/model-evaluation.md)
+- [第三阶段操作说明](docs/phase-3-operations.md)
+- [第三阶段验收报告](docs/phase-3-acceptance.md)
 
 当前使用的是 NOAA IBTrACS 中的 CMA 字段，并未接入独立 CMA TXT 数据源或 ERA5。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet 和 ECharts 均动态渲染，未使用截图伪装交互图表。
 

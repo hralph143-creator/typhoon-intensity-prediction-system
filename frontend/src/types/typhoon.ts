@@ -63,6 +63,8 @@ export interface Observation {
   usa_wind_ms: number | null
   tokyo_wind_ms: number | null
   quality_flags: string[]
+  iflag?: string | null
+  cma_iflag?: string | null
   source_file_id: number
 }
 export interface TyphoonDetail extends TyphoonEvent { source_files: SourceFile[]; track_types: string[] }

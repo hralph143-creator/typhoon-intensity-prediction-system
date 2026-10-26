@@ -66,7 +66,7 @@ function render() {
   for (const [index, text] of [[0, '起点'], [coordinates.length - 1, '终点']] as const) {
     L.marker(coordinates[index], { icon: L.divIcon({ className: 'track-endpoint', html: `<span>${text}</span>`, iconSize: [40, 24], iconAnchor: [20, 30] }) }).addTo(layer)
   }
-  map.fitBounds(L.latLngBounds(coordinates), { padding: [38, 38], maxZoom: 6 })
+  map.fitBounds(L.latLngBounds(coordinates), { padding: [38, 38], maxZoom: 6, animate: false })
   renderGraticule()
   selection()
 }
@@ -85,7 +85,16 @@ onMounted(() => {
 })
 watch(() => props.points, render)
 watch(() => props.selectedIndex, selection)
-onBeforeUnmount(() => { observer?.disconnect(); map?.remove() })
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  map?.stop()
+  map?.off()
+  layer?.clearLayers()
+  graticule?.clearLayers()
+  selected?.remove()
+  map?.remove()
+  map = undefined
+})
 </script>
 
 <template>

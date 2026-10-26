@@ -220,6 +220,8 @@ def iter_csv_records(
                 "tokyo_wind": tokyo_wind, "tokyo_wind_ms": tokyo_wind * KNOT_TO_MS if tokyo_wind is not None else None,
                 "tokyo_pressure": _pressure(raw, "TOKYO_PRES", flags),
                 "wind_unit": "knots", "quality_flags": flags,
+                "iflag": raw.get("IFLAG") or None,
+                "cma_iflag": ((raw.get("IFLAG") or "___") + "___")[2],
                 "raw_values": raw,
                 "row_hash": hashlib.sha256(json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest(),
             }

@@ -107,6 +107,8 @@ class TyphoonObservation(Base):
     tokyo_pressure: Mapped[float | None] = mapped_column(Float)
     wind_unit: Mapped[str] = mapped_column(String(16), default="knots")
     quality_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    iflag: Mapped[str | None] = mapped_column(String(32))
+    cma_iflag: Mapped[str | None] = mapped_column(String(1), index=True)
     raw_values: Mapped[dict[str, Any]] = mapped_column(JSON)
     source_file_id: Mapped[int] = mapped_column(ForeignKey("source_files.id"))
     row_hash: Mapped[str] = mapped_column(String(64))
