@@ -26,6 +26,8 @@ async def lifespan(_: FastAPI):
     recover_interrupted_jobs()
     from backend.app.services.ml_training import recover_training_jobs
     recover_training_jobs()
+    from backend.app.services.era5_service import recover_download_jobs
+    recover_download_jobs()
     logger.info("数据库初始化完成，应用已启动")
     yield
     logger.info("应用已停止")
@@ -34,7 +36,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="云浪智析科研软件后端接口（第二阶段：真实历史台风数据）",
+    description="云浪智析科研软件后端接口（第四阶段：ERA5 时空样本）",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -52,7 +54,7 @@ app.include_router(api_router)
 @app.middleware("http")
 async def upload_size_limit(request: Request, call_next):
     length = request.headers.get("content-length")
-    if request.url.path == "/api/ibtracs/import" and length and length.isdigit() and int(length) > settings.upload_max_bytes + 1024 * 1024:
+    if request.url.path in {"/api/ibtracs/import", "/api/era5/import"} and length and length.isdigit() and int(length) > settings.upload_max_bytes + 1024 * 1024:
         return JSONResponse(status_code=413, content={"success": False, "message": "上传文件过大", "error": {"code": "FILE_TOO_LARGE"}})
     return await call_next(request)
 

@@ -1,8 +1,8 @@
 # 云浪智析——基于时空注意力的台风强度预测系统
 
-这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.3.0，第三阶段：历史强度时序预测与模型评估**。
+这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.4.0，第四阶段：ERA5 环境场与时空样本**。
 
-已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并使用严格 CMA IFLAG 质量筛选构建未来 6 小时预测样本。系统已实际训练 Persistence、Ridge、LSTM 和 GRU，支持历史回测推理、真实指标比较、实验管理和导出。ERA5 和 SAF-Net 仍未接入。
+已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并使用严格 CMA IFLAG 质量筛选构建未来 6 小时预测样本。系统已实际训练 Persistence、Ridge、LSTM 和 GRU。第四阶段已实现 ERA5 U10/V10 的授权检查、小范围请求规划、下载任务、NetCDF 导入质检、台风中心 31×31 裁剪、四时次样本和科学可视化。当前机器尚未配置 CDS 凭据，因此没有把合成数据冒充实际 ERA5 成果；SAF-Net 仍未开展。
 
 ## 技术架构
 
@@ -68,6 +68,12 @@ API 与 CLI 共用处理逻辑和跨进程任务锁。CSV 分块接收、逐行�
 
 指标与模型文件相互关联，不是页面硬编码。在“模型训练”创建后台任务，在“强度预测”选择历史台风和起报时刻，在“预测性能评估”查看真实测试结果。详见 [第三阶段验收报告](docs/phase-3-acceptance.md)。
 
+## ERA5 风场接入
+
+按 [ERA5 数据指南](docs/era5-data-guide.md) 配置个人 CDS 令牌并接受数据集许可后，可在“气象风场分析”检查连接和查看由真实历史轨迹生成的小范围计划。也可导入已有 `.nc/.nc4` 文件；系统先检查 U10/V10、m/s 单位、坐标、时间、分辨率、缺测率和风速范围，再归档并记录 SHA-256。
+
+处理网格以每个历史时次的台风中心为中心，采用 0.25° 双线性插值形成 `(2,31,31)`，四个输入时次合成 `(4,2,31,31)`，标签仍为 `t+6h`。训练/验证/测试划分完全继承第三阶段，详见 [时空样本设计](docs/spatiotemporal-sample-design.md) 和 [第四阶段验收报告](docs/phase-4-acceptance.md)。
+
 ## 自动化测试
 
 ```powershell
@@ -111,6 +117,10 @@ docs/          项目文档
 - `GET /api/ml/models`、`/comparison`：已保存模型与公平指标比较
 - `POST /api/ml/predict`：调用真实模型执行历史回测
 - `GET /api/ml/export/experiments`：导出 CSV 或 Excel 实验记录
+- `GET /api/era5/status`、`POST /api/era5/connection-test`：安全检查凭据和客户端状态
+- `GET /api/era5/plans`、`POST/GET /api/era5/jobs`：小范围计划和可恢复下载任务
+- `POST /api/era5/import`、`GET /api/era5/files`：NetCDF 质检、归档和追溯
+- `POST /api/era5/samples/build`、`GET /api/era5/samples/statistics`：构建和统计四时次样本
 
 接口返回统一 `success/message/data` 格式；错误返回 `success=false/message/error`。日期统一 UTC，风速 m/s、气压 hPa，原始风速 knots 和机构保留。SQLite WAL 模式允许导入事务期间继续查询旧的已提交数据。
 
@@ -127,7 +137,10 @@ docs/          项目文档
 - [模型评价](docs/model-evaluation.md)
 - [第三阶段操作说明](docs/phase-3-operations.md)
 - [第三阶段验收报告](docs/phase-3-acceptance.md)
+- [ERA5 数据指南](docs/era5-data-guide.md)
+- [时空样本设计](docs/spatiotemporal-sample-design.md)
+- [第四阶段验收报告](docs/phase-4-acceptance.md)
 
-当前使用的是 NOAA IBTrACS 中的 CMA 字段，并未接入独立 CMA TXT 数据源或 ERA5。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet 和 ECharts 均动态渲染，未使用截图伪装交互图表。
+当前使用 NOAA IBTrACS 中的 CMA 字段，尚未接入独立 CMA TXT 数据源。本机 ERA5 在线授权仍待配置。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 
-原始文件、数据库、任务锁、模型权重、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。后续阶段需在当前清洗结果上进行严格事件/年份隔离和真实基线实验；本次完成后不自动开展训练。
+原始文件、数据库、任务锁、模型权重、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第四阶段不训练 SAF-Net，也不自动开展第五阶段。
