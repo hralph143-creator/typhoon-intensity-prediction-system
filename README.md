@@ -1,8 +1,8 @@
 # 云浪智析——基于时空注意力的台风强度预测系统
 
-这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.4.0，第四阶段：ERA5 环境场与时空样本**。
+这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.5.0，第五阶段：SAF-Net 时空注意力融合网络**。
 
-已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并使用严格 CMA IFLAG 质量筛选构建未来 6 小时预测样本。系统已实际训练 Persistence、Ridge、LSTM 和 GRU。第四阶段已实现 ERA5 U10/V10 的授权检查、小范围请求规划、下载任务、NetCDF 导入质检、台风中心 31×31 裁剪、四时次样本和科学可视化。当前机器尚未配置 CDS 凭据，因此没有把合成数据冒充实际 ERA5 成果；SAF-Net 仍未开展。
+已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并使用严格 CMA IFLAG 质量筛选构建未来 6 小时预测样本。系统已实际训练 Persistence、Ridge、LSTM 和 GRU。第四阶段完成 ERA5 U10/V10 基础设施；第五阶段已实现可运行的 SAF-Net、严格数据加载、训练/评估/推理框架和注意力可视化。当前实际 ERA5 时空样本仍为 0，因此正式 SAF-Net 训练与推理被明确禁用，没有生成虚构权重或指标。
 
 ## 技术架构
 
@@ -74,6 +74,12 @@ API 与 CLI 共用处理逻辑和跨进程任务锁。CSV 分块接收、逐行�
 
 处理网格以每个历史时次的台风中心为中心，采用 0.25° 双线性插值形成 `(2,31,31)`，四个输入时次合成 `(4,2,31,31)`，标签仍为 `t+6h`。训练/验证/测试划分完全继承第三阶段，详见 [时空样本设计](docs/spatiotemporal-sample-design.md) 和 [第四阶段验收报告](docs/phase-4-acceptance.md)。
 
+## SAF-Net
+
+SAF-Net 对四个时次分别使用共享二维 CNN 和 CBAM 风格空间注意力，时间分支将每时次 CMA 历史风速映射至 96 维，再用 8 头自注意力编码四时次关系；两个分支经显式维度校验后融合并回归 `t+6h` 风速。默认模型共有 134,468 个可训练参数。
+
+训练标准化参数只拟合训练集。模型保存 `state_dict`、配置、输入定义、标准化参数、数据版本和 SHA-256；加载使用 `weights_only=True` 并校验文件。当前无真实时空样本时，后端拒绝创建正式实验，前端禁用训练和预测。详见 [SAF-Net 结构](docs/safnet-architecture.md)、[训练与模型管理](docs/safnet-training.md)、[算法烟雾测试](docs/safnet-algorithm-tests.md)和[第五阶段验收](docs/phase-5-acceptance.md)。
+
 ## 自动化测试
 
 ```powershell
@@ -116,6 +122,8 @@ docs/          项目文档
 - `POST/GET /api/ml/experiments`：训练任务与实验查询、取消和删除
 - `GET /api/ml/models`、`/comparison`：已保存模型与公平指标比较
 - `POST /api/ml/predict`：调用真实模型执行历史回测
+- `GET /api/ml/safnet/info`、`/safnet/samples`：SAF-Net 结构、参数量与真实样本可用性
+- `POST /api/ml/safnet/predict`：使用已训练 SAF-Net 和完整时空样本推理，并可返回注意力
 - `GET /api/ml/export/experiments`：导出 CSV 或 Excel 实验记录
 - `GET /api/era5/status`、`POST /api/era5/connection-test`：安全检查凭据和客户端状态
 - `GET /api/era5/plans`、`POST/GET /api/era5/jobs`：小范围计划和可恢复下载任务
@@ -140,7 +148,12 @@ docs/          项目文档
 - [ERA5 数据指南](docs/era5-data-guide.md)
 - [时空样本设计](docs/spatiotemporal-sample-design.md)
 - [第四阶段验收报告](docs/phase-4-acceptance.md)
+- [SAF-Net 网络结构](docs/safnet-architecture.md)
+- [SAF-Net 训练与模型管理](docs/safnet-training.md)
+- [注意力机制说明](docs/safnet-attention.md)
+- [算法烟雾测试](docs/safnet-algorithm-tests.md)
+- [第五阶段验收报告](docs/phase-5-acceptance.md)
 
 当前使用 NOAA IBTrACS 中的 CMA 字段，尚未接入独立 CMA TXT 数据源。本机 ERA5 在线授权仍待配置。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 
-原始文件、数据库、任务锁、模型权重、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第四阶段不训练 SAF-Net，也不自动开展第五阶段。
+原始文件、数据库、任务锁、模型权重、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第五阶段完成后不自动进入第六阶段。

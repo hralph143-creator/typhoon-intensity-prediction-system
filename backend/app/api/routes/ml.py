@@ -8,9 +8,13 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
+from backend.app.db.database import SessionLocal
+from backend.app.models.era5 import SpatiotemporalSample
 from backend.app.services.ml_dataset import audit_data, build_samples, dataset_version, split_statistics
 from backend.app.services.ml_training import cancel_experiment, create_experiment, delete_experiment, get_experiment, historical_predict, list_experiments, list_models
+from backend.app.services.safnet_training import predict as safnet_predict, structure_info
 
 router = APIRouter(prefix="/ml", tags=["历史强度预测"])
 
@@ -30,6 +34,12 @@ class BacktestRequest(BaseModel):
     model_id: str
     typhoon_id: int
     forecast_time: datetime
+
+
+class SAFNetPredictRequest(BaseModel):
+    model_id: str
+    sample_id: str
+    include_attention: bool = False
 
 
 @router.get("/audit")
@@ -73,6 +83,24 @@ def remove(experiment_id: str, confirmed: bool = False):
 
 @router.get("/models")
 def models(): return ok(list_models())
+
+
+@router.get("/safnet/info")
+def safnet_info(): return ok(structure_info())
+
+
+@router.get("/safnet/samples")
+def safnet_samples(limit: int = Query(100, ge=1, le=500)):
+    with SessionLocal() as db:
+        rows=list(db.scalars(select(SpatiotemporalSample).order_by(SpatiotemporalSample.forecast_time.desc()).limit(limit)))
+        return ok([{"id":x.id,"sid":x.sid,"forecast_time":x.forecast_time.isoformat()+"Z","target_time":x.target_time.isoformat()+"Z","split":x.split,"shape":x.shape} for x in rows])
+
+
+@router.post("/safnet/predict")
+def predict_safnet(payload: SAFNetPredictRequest):
+    try:return ok(safnet_predict(payload.model_id,payload.sample_id,payload.include_attention),"SAF-Net 历史回测完成")
+    except LookupError as exc:raise HTTPException(404,str(exc))
+    except ValueError as exc:raise HTTPException(422,str(exc))
 
 
 @router.get("/comparison")

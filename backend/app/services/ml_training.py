@@ -64,6 +64,9 @@ def recover_training_jobs():
 
 def create_experiment(payload: dict) -> dict:
     model_type = str(payload.get("model_type", "")).lower()
+    if model_type == "safnet":
+        from backend.app.services.safnet_training import create_experiment as create_safnet_experiment
+        return create_safnet_experiment(payload)
     if model_type not in {"persistence", "ridge", "lstm", "gru"}:
         raise ValueError("模型必须为 persistence、ridge、lstm 或 gru")
     quality = payload.get("quality_profile", "strict")
@@ -85,6 +88,13 @@ def create_experiment(payload: dict) -> dict:
 
 
 def cancel_experiment(experiment_id: str) -> dict:
+    with SessionLocal() as db:
+        existing = db.get(TrainingExperiment, experiment_id)
+        if not existing: raise LookupError("实验不存在")
+        is_safnet = existing.model_type == "safnet"
+    if is_safnet:
+        from backend.app.services.safnet_training import cancel as cancel_safnet
+        cancel_safnet(experiment_id)
     with _lock:
         signal = _signals.get(experiment_id)
         if signal: signal.set()
@@ -266,6 +276,7 @@ def historical_predict(model_id: str, typhoon_id: int, forecast_time: datetime) 
     with SessionLocal() as db:
         model=db.get(ModelArtifact,model_id); event=db.get(TyphoonEvent,typhoon_id)
         if not model or not event: raise LookupError("模型或台风事件不存在")
+        if model.model_type=="safnet": raise ValueError("SAF-Net 必须使用完整 ERA5 时空样本推理接口")
         latest=select(TyphoonObservation).where(TyphoonObservation.typhoon_id==typhoon_id,TyphoonObservation.track_type=="MAIN").order_by(TyphoonObservation.observation_time,TyphoonObservation.id)
         by_time={row.observation_time:row for row in db.scalars(latest)}
         times=[forecast_time-timedelta(hours=value) for value in (18,12,6,0)]; rows=[by_time.get(moment) for moment in times]

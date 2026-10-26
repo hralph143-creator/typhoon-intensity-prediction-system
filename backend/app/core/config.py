@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     app_name: str = "基于时空注意力的台风强度预测系统"
     app_brand: str = "云浪智析"
-    app_version: str = "0.4.0"
+    app_version: str = "0.5.0"
     app_env: str = "development"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
