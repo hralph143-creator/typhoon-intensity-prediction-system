@@ -1,4 +1,6 @@
 """启动器必须识别本项目服务，不能接管无关的端口占用。"""
+from pathlib import Path
+
 from scripts import check_environment
 
 
@@ -31,3 +33,13 @@ def test_unrelated_frontend_is_not_reused(monkeypatch):
 def test_local_frontend_is_recognized(monkeypatch):
     monkeypatch.setattr(check_environment, "fetch_json", lambda _: {"name": "typhoon-prediction-frontend"})
     assert check_environment.frontend_is_ours()
+
+
+def test_run_bat_is_windows_safe_and_opens_application():
+    content=(Path(__file__).resolve().parents[2]/"run.bat").read_bytes()
+    assert content.startswith(b"\xef\xbb\xbf@echo off\r\n")
+    assert content.count(b"\n")==content.count(b"\r\n")
+    text=content.decode("utf-8-sig")
+    assert 'start "" "http://127.0.0.1:5173/"' in text
+    assert '"%~1"=="--no-browser"' in text
+    assert "CLOUDWAVE_NO_PAUSE" in text
