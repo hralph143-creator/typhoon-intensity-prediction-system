@@ -7,6 +7,10 @@ __pycache__/
 .env
 backend/data/*.db
 data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.lock
+data/*.cancel
 data/raw/*
 data/processed/*
 data/cache/*

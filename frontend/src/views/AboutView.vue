@@ -1,1 +1,17 @@
-<template><section class="page-stack"><div class="page-heading"><div><h2>关于云浪智析</h2><p>面向科研复现的台风强度分析与预测软件。</p></div></div><el-card shadow="never" class="data-card"><h3>系统定位</h3><p class="body-copy">本系统围绕历史台风最佳路径与 ERA5 近海面风场数据，规划构建时空注意力融合网络，用于台风强度演变研究。当前版本处于工程初始化阶段。</p><h3>规划数据来源</h3><ul class="source-list"><li><strong>NOAA IBTrACS</strong><span>国际热带气旋最佳路径档案</span></li><li><strong>中国气象局 CMA</strong><span>热带气旋最佳路径数据</span></li><li><strong>Copernicus ERA5</strong><span>近海面 U10、V10 再分析风场</span></li></ul><el-alert title="使用边界" description="本系统仅供科研与教学使用，不构成气象主管部门发布的业务预报或预警。" type="warning" :closable="false" show-icon/></el-card></section></template>
+<template>
+  <section class="page-stack">
+    <div class="page-heading"><div><h2>关于云浪智析</h2><p>面向科研复现的台风强度分析与预测软件。</p></div></div>
+    <el-card shadow="never" class="data-card">
+      <h3>系统定位</h3>
+      <p class="body-copy">本系统服务于“云浪智析——数智融合下台风强度演变智能预判平台”项目。当前版本提供 NOAA IBTrACS 数据下载与导入、2014—2025 年西北太平洋历史台风档案、真实历史路径及多机构强度变化分析。时空注意力模型属于后续研究内容，当前尚无训练或预测结果。</p>
+      <h3>数据来源与接入范围</h3>
+      <ul class="source-list">
+        <li><strong><a href="https://www.ncei.noaa.gov/products/international-best-track-archive" target="_blank" rel="noopener">NOAA IBTrACS ↗</a></strong><span>国际热带气旋最佳路径档案 · v04r01 · 已提供接入能力</span></li>
+        <li><strong>中国气象局 CMA</strong><span>独立最佳路径文件尚未接入；IBTrACS 中的 CMA 观测单独保存</span></li>
+        <li><strong>Copernicus ERA5</strong><span>近海面 U10、V10 再分析风场 · 尚未接入</span></li>
+      </ul>
+      <p class="body-copy">不同机构风速平均时段不同，系统保留原值与机构信息，不将其换算为同一种观测口径。历史最佳路径与再分析资料均不代表实时预报。</p>
+      <el-alert title="使用边界" description="本系统仅供科研与教学使用，不构成气象主管部门发布的业务预报或预警。" type="warning" :closable="false" show-icon />
+    </el-card>
+  </section>
+</template>

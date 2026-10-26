@@ -3,6 +3,9 @@ from pathlib import Path
 
 from backend.app.core.config import PROJECT_ROOT
 from backend.app.schemas.system import DataSourceStatus
+from backend.app.db.database import SessionLocal
+from backend.app.models.typhoon import SourceFile, TyphoonObservation
+from sqlalchemy import select, func
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,11 @@ def get_data_source_statuses() -> list[DataSourceStatus]:
         for pattern in source.patterns:
             files.update(path for path in source_path.glob(pattern) if path.is_file())
         connected = bool(files)
+        imported = False
+        if source.code == "ibtracs" and files:
+            with SessionLocal() as db:
+                imported = bool(db.scalar(select(func.count()).select_from(TyphoonObservation)))
+            connected = imported
         statuses.append(
             DataSourceStatus(
                 code=source.code,
@@ -49,7 +57,7 @@ def get_data_source_statuses() -> list[DataSourceStatus]:
                 connected=connected,
                 file_count=len(files),
                 local_path=str(source_path),
-                status_text="已检测到本地数据" if connected else "尚未接入",
+                status_text=("已导入真实数据" if imported else "已检测到本地文件，尚未导入" if files else "尚未接入") if source.code == "ibtracs" else ("已检测到本地数据" if connected else "尚未接入"),
                 official_url=source.url,
             )
         )
