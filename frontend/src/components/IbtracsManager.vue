@@ -72,7 +72,7 @@ onBeforeUnmount(() => { disposed = true; clearTimeout(timer) })
       <span>观测记录 <strong>{{ status.observation_count.toLocaleString() }}</strong></span>
       <span>最近导入 <strong>{{ utc(status.last_import_at) }}</strong></span>
     </div>
-    <p class="muted-note">默认复用已校验缓存；勾选“强制刷新官方文件”可重新获取 NOAA 最新版本。仅筛选 2014—2025 年、BASIN=WP 的观测；CMA 和 ERA5 独立数据源尚未接入。</p>
+    <p class="muted-note">默认复用已校验缓存；勾选“强制刷新官方文件”可重新获取 NOAA 最新版本。仅筛选 2014—2025 年、BASIN=WP 的观测；CMA 独立路径和 ERA5 风场由各自数据模块管理。</p>
     <el-table :data="jobs" empty-text="暂无下载或导入任务" size="small">
       <el-table-column prop="filename" label="最近任务" min-width="220" show-overflow-tooltip />
       <el-table-column label="状态" width="110"><template #default="{row}"><el-tag :type="row.status === 'failed' ? 'danger' : row.status === 'succeeded' ? 'success' : 'info'">{{ jobLabel(row.status) }}</el-tag></template></el-table-column>

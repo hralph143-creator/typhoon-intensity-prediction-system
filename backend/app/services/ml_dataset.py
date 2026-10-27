@@ -56,7 +56,10 @@ def _accepted(flag: str | None, profile: str) -> bool:
 def latest_main_observations(db=None):
     own = db is None
     db = db or SessionLocal()
-    latest = select(func.max(TyphoonObservation.id)).where(TyphoonObservation.track_type == "MAIN").group_by(TyphoonObservation.typhoon_id, TyphoonObservation.observation_time)
+    ibtracs_ids = select(TyphoonEvent.id).where(TyphoonEvent.source == "ibtracs")
+    latest = select(func.max(TyphoonObservation.id)).where(
+        TyphoonObservation.track_type == "MAIN", TyphoonObservation.typhoon_id.in_(ibtracs_ids)
+    ).group_by(TyphoonObservation.typhoon_id, TyphoonObservation.observation_time)
     stmt = select(
         TyphoonObservation.id, TyphoonObservation.typhoon_id, TyphoonObservation.observation_time,
         TyphoonObservation.cma_wind, TyphoonObservation.cma_wind_ms, TyphoonObservation.cma_iflag,
@@ -97,7 +100,7 @@ def build_samples(profile: str = "strict", db=None) -> list[IntensitySample]:
 def dataset_version(profile: str, db=None) -> str:
     own = db is None
     db = db or SessionLocal()
-    hashes = list(db.scalars(select(SourceFile.sha256).order_by(SourceFile.id)))
+    hashes = list(db.scalars(select(SourceFile.sha256).where(SourceFile.source == "ibtracs").order_by(SourceFile.id)))
     if own:
         db.close()
     digest = sha256(("|".join(hashes) + f"|6h-four-step-{profile}-v1").encode()).hexdigest()[:16]
@@ -129,11 +132,11 @@ def split_statistics(samples: Iterable[IntensitySample]) -> dict:
 
 def audit_data() -> dict:
     with SessionLocal() as db:
-        all_rows = [(SimpleNamespace(track_type=row.track_type,cma_wind=row.cma_wind,cma_wind_ms=row.cma_wind_ms,cma_iflag=row.cma_iflag,iflag=row.iflag,quality_flags=row.quality_flags or []),SimpleNamespace(season=row.season)) for row in db.execute(select(TyphoonObservation.track_type,TyphoonObservation.cma_wind,TyphoonObservation.cma_wind_ms,TyphoonObservation.cma_iflag,TyphoonObservation.iflag,TyphoonObservation.quality_flags,TyphoonEvent.season).join(TyphoonEvent))]
+        all_rows = [(SimpleNamespace(track_type=row.track_type,cma_wind=row.cma_wind,cma_wind_ms=row.cma_wind_ms,cma_iflag=row.cma_iflag,iflag=row.iflag,quality_flags=row.quality_flags or []),SimpleNamespace(season=row.season)) for row in db.execute(select(TyphoonObservation.track_type,TyphoonObservation.cma_wind,TyphoonObservation.cma_wind_ms,TyphoonObservation.cma_iflag,TyphoonObservation.iflag,TyphoonObservation.quality_flags,TyphoonEvent.season).join(TyphoonEvent).where(TyphoonEvent.source == "ibtracs"))]
         main_rows = latest_main_observations(db)
         strict = build_samples("strict", db)
         extended = build_samples("extended", db)
-        yearly_events = {year: count for year, count in db.execute(select(TyphoonEvent.season, func.count()).group_by(TyphoonEvent.season)).all()}
+        yearly_events = {year: count for year, count in db.execute(select(TyphoonEvent.season, func.count()).where(TyphoonEvent.source == "ibtracs").group_by(TyphoonEvent.season)).all()}
     yearly_valid = Counter(event.season for observation, event in main_rows if observation.cma_wind_ms is not None)
     track_types = Counter(observation.track_type for observation, _ in all_rows)
     flags = Counter((observation.cma_iflag or "_") for observation, _ in all_rows)

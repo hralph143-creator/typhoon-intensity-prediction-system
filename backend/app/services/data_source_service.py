@@ -5,6 +5,8 @@ from backend.app.core.config import PROJECT_ROOT
 from backend.app.schemas.system import DataSourceStatus
 from backend.app.db.database import SessionLocal
 from backend.app.models.typhoon import SourceFile, TyphoonObservation
+from backend.app.models.era5 import Era5File
+from backend.app.models.typhoon import TyphoonEvent
 from sqlalchemy import select, func
 
 
@@ -28,7 +30,7 @@ SOURCES = (
         "https://tcdata.typhoon.org.cn/zjljsjj.html",
     ),
     SourceDefinition(
-        "era5", "ERA5 近海面风场", "Copernicus CDS", "era5", ("*.nc", "*.nc4", "*.grib"),
+        "era5", "ERA5 近海面风场", "ECMWF / Copernicus C3S", "era5", ("*.nc", "*.nc4", "*.grib"),
         "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels",
     ),
 )
@@ -45,9 +47,13 @@ def get_data_source_statuses() -> list[DataSourceStatus]:
             files.update(path for path in source_path.glob(pattern) if path.is_file())
         connected = bool(files)
         imported = False
-        if source.code == "ibtracs" and files:
+        if source.code in {"ibtracs", "cma"}:
             with SessionLocal() as db:
-                imported = bool(db.scalar(select(func.count()).select_from(TyphoonObservation)))
+                imported = bool(db.scalar(select(func.count()).select_from(TyphoonObservation).join(TyphoonEvent).where(TyphoonEvent.source == source.code)))
+            connected = imported
+        elif source.code == "era5":
+            with SessionLocal() as db:
+                imported = bool(db.scalar(select(func.count()).select_from(Era5File).where(Era5File.status == "valid")))
             connected = imported
         statuses.append(
             DataSourceStatus(
@@ -57,7 +63,7 @@ def get_data_source_statuses() -> list[DataSourceStatus]:
                 connected=connected,
                 file_count=len(files),
                 local_path=str(source_path),
-                status_text=("已导入真实数据" if imported else "已检测到本地文件，尚未导入" if files else "尚未接入") if source.code == "ibtracs" else ("已检测到本地数据" if connected else "尚未接入"),
+                status_text="已导入真实数据" if imported else "已检测到本地文件，尚未导入" if files else "尚未接入",
                 official_url=source.url,
             )
         )

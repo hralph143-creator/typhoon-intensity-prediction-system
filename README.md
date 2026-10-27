@@ -2,7 +2,7 @@
 
 这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.6.0，第六阶段：科研分析报告、结果导出与系统综合完善**。
 
-已接入 NOAA 官方 IBTrACS 西北太平洋历史数据，并实际训练 Persistence、Ridge、LSTM 和 GRU。第六阶段新增真实数据快照驱动的三类 HTML/PDF 科研报告、统一 XLSX/CSV/PNG 导出、严格公平比较、预测记录查询、日志、SQLite 一致性备份恢复和受控维护。当前实际 ERA5 时空样本仍为 0，因此没有 SAF-Net 正式权重或虚构指标。
+已接入 NOAA 官方 IBTrACS、中国气象局 CMA 独立最佳路径和 ECMWF/Copernicus ERA5 真实风场，并实际训练 Persistence、Ridge、LSTM 和 GRU。第六阶段新增真实数据快照驱动的三类 HTML/PDF 科研报告、统一 XLSX/CSV/PNG 导出、严格公平比较、预测记录查询、日志、SQLite 一致性备份恢复和受控维护。当前已有首个真实 ERA5 四时次样本，但训练、验证、测试三组尚未同时齐备，因此没有 SAF-Net 正式权重或虚构指标。
 
 ## 技术架构
 
@@ -70,7 +70,7 @@ API 与 CLI 共用处理逻辑和跨进程任务锁。CSV 分块接收、逐行�
 
 ## ERA5 风场接入
 
-按 [ERA5 数据指南](docs/era5-data-guide.md) 配置个人 CDS 令牌并接受数据集许可后，可在“气象风场分析”检查连接和查看由真实历史轨迹生成的小范围计划。也可导入已有 `.nc/.nc4` 文件；系统先检查 U10/V10、m/s 单位、坐标、时间、分辨率、缺测率和风速范围，再归档并记录 SHA-256。
+“气象风场分析”可直接从 Google Cloud 公共 ARCO-ERA5 读取 ECMWF/Copernicus 生产的真实 U10/V10 小范围风场，无需个人令牌；配置 CDS 个人令牌后还可使用官方 API 扩展下载。也可导入已有 `.nc/.nc4` 文件；系统先检查 U10/V10、m/s 单位、坐标、时间、分辨率、缺测率和风速范围，再归档并记录 SHA-256。详见 [ERA5 数据指南](docs/era5-data-guide.md)。
 
 处理网格以每个历史时次的台风中心为中心，采用 0.25° 双线性插值形成 `(2,31,31)`，四个输入时次合成 `(4,2,31,31)`，标签仍为 `t+6h`。训练/验证/测试划分完全继承第三阶段，详见 [时空样本设计](docs/spatiotemporal-sample-design.md) 和 [第四阶段验收报告](docs/phase-4-acceptance.md)。
 
@@ -165,6 +165,6 @@ docs/          项目文档
 - [软件功能总览](docs/software-features.md)
 - [第六阶段验收报告](docs/phase-6-acceptance.md)
 
-当前使用 NOAA IBTrACS 中的 CMA 字段，尚未接入独立 CMA TXT 数据源。本机 ERA5 在线授权仍待配置。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
+当前同时保存 NOAA IBTrACS 中的 CMA 字段和独立 CMA TXT 数据源，查询时可切换来源。ERA5 已通过公共 ARCO 镜像接入，CDS 个人授权仅作为扩展下载方式。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 
 原始文件、数据库、任务锁、模型权重、生成报告、备份、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第六阶段完成后不自动进入第七阶段。

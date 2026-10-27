@@ -25,6 +25,7 @@ from backend.app.services.ml_dataset import build_samples, dataset_version, spli
 DATASET = "reanalysis-era5-single-levels"
 OFFICIAL_URL = "https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels"
 SETUP_URL = "https://cds.climate.copernicus.eu/how-to-api"
+PUBLIC_ARCO_URL = "https://storage.googleapis.com/gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3"
 PROCESSING_VERSION = "spatiotemporal-v1"
 OFFSETS = (18, 12, 6, 0)
 ACTIVE_JOB_STATUSES = {"queued", "submitting", "processing", "downloading", "validating"}
@@ -196,6 +197,59 @@ def serialize_file(item: Era5File) -> dict:
 
 def list_files() -> list[dict]:
     with SessionLocal() as db: return [serialize_file(x) for x in db.scalars(select(Era5File).order_by(Era5File.id.desc()))]
+
+
+def download_public_sample() -> dict:
+    """从公共 ARCO 镜像下载一个完整四时次真实 ERA5 样本。"""
+    samples = build_samples("strict")
+    if not samples:
+        raise ValueError("没有可用于 ERA5 对齐的严格强度样本")
+    sample = samples[0]
+    moments = [sample.forecast_time - timedelta(hours=hours) for hours in OFFSETS]
+    with SessionLocal() as db:
+        rows = list(db.scalars(select(TyphoonObservation).where(
+            TyphoonObservation.typhoon_id == sample.typhoon_id,
+            TyphoonObservation.observation_time.in_(moments),
+            TyphoonObservation.track_type == "MAIN",
+        )))
+    by_time = {row.observation_time: row for row in rows}
+    if any(moment not in by_time for moment in moments):
+        raise ValueError("严格样本缺少轨迹中心")
+    centers = [(by_time[m].cma_lat or by_time[m].latitude, by_time[m].cma_lon or by_time[m].longitude) for m in moments]
+    if any(lon < 0 or lon > 360 for _, lon in centers):
+        raise ValueError("公共样本暂不支持跨本初子午线或日界线范围")
+    north = np.ceil((max(lat for lat, _ in centers) + 4) * 4) / 4
+    south = np.floor((min(lat for lat, _ in centers) - 4) * 4) / 4
+    west = np.floor((min(lon for _, lon in centers) - 4) * 4) / 4
+    east = np.ceil((max(lon for _, lon in centers) + 4) * 4) / 4
+    variables = ["10m_u_component_of_wind", "10m_v_component_of_wind"]
+    dataset = xr.open_zarr(PUBLIC_ARCO_URL, chunks=None, consolidated=True)
+    try:
+        subset = dataset[variables].sel(
+            time=np.asarray(moments, dtype="datetime64[ns]"),
+            latitude=slice(north, south), longitude=slice(west, east),
+        ).load()
+    finally:
+        dataset.close()
+    subset = subset.rename({variables[0]: "u10", variables[1]: "v10"})
+    subset["u10"].attrs.update(units="m s**-1", long_name="10 metre U wind component")
+    subset["v10"].attrs.update(units="m s**-1", long_name="10 metre V wind component")
+    settings.era5_raw_dir.mkdir(parents=True, exist_ok=True)
+    temporary = settings.era5_raw_dir / f"arco-era5-{sample.sid}-{sample.forecast_time:%Y%m%d%H}.tmp.nc"
+    request = {
+        "source": "google_public_arco_era5", "upstream_producer": "ECMWF Copernicus Climate Change Service",
+        "public_store": PUBLIC_ARCO_URL, "sid": sample.sid,
+        "times": [_iso(moment) for moment in moments], "area": [float(north), float(west), float(south), float(east)],
+        "variables": variables, "license": "Copernicus C3S/CAMS License",
+    }
+    try:
+        subset.to_netcdf(temporary, engine="h5netcdf")
+        registered = register_file(temporary, temporary.name.replace(".tmp", ""), request)
+    finally:
+        temporary.unlink(missing_ok=True)
+        subset.close()
+    built = build_spatiotemporal_samples(limit=1)
+    return {"file": registered, "sample": {"sid": sample.sid, "forecast_time": _iso(sample.forecast_time)}, "build": built}
 
 
 def _normalized(ds: xr.Dataset, lat: str, lon: str) -> xr.Dataset:

@@ -33,22 +33,24 @@ def event_dict(event) -> dict:
     return result
 
 
-def statistics(db: Session) -> dict:
-    main_ids = select(TyphoonObservation.typhoon_id).where(TyphoonObservation.track_type == "MAIN").distinct()
+def statistics(db: Session, source: str = "ibtracs") -> dict:
+    source_ids = select(TyphoonEvent.id).where(TyphoonEvent.source == source)
+    main_ids = select(TyphoonObservation.typhoon_id).where(TyphoonObservation.track_type == "MAIN", TyphoonObservation.typhoon_id.in_(source_ids)).distinct()
     yearly = db.execute(select(TyphoonEvent.season, func.count()).where(TyphoonEvent.id.in_(main_ids)).group_by(TyphoonEvent.season).order_by(TyphoonEvent.season)).all()
-    yearly_all = db.execute(select(TyphoonEvent.season, func.count()).group_by(TyphoonEvent.season).order_by(TyphoonEvent.season)).all()
-    latest = db.scalar(select(ImportJob).order_by(ImportJob.started_at.desc()).limit(1))
-    last_import = db.scalar(select(func.max(SourceFile.imported_at)).where(SourceFile.status == "imported"))
+    yearly_all = db.execute(select(TyphoonEvent.season, func.count()).where(TyphoonEvent.source == source).group_by(TyphoonEvent.season).order_by(TyphoonEvent.season)).all()
+    latest = db.scalar(select(ImportJob).where(ImportJob.source == source).order_by(ImportJob.started_at.desc()).limit(1))
+    last_import = db.scalar(select(func.max(SourceFile.imported_at)).where(SourceFile.status == "imported", SourceFile.source == source))
     return {
         "typhoon_count": sum(item[1] for item in yearly),
-        "all_event_count": db.scalar(select(func.count()).select_from(TyphoonEvent)),
-        "observation_count": db.scalar(select(func.count()).select_from(TyphoonObservation)),
-        "main_observation_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.track_type == "MAIN")),
+        "source": source,
+        "all_event_count": db.scalar(select(func.count()).select_from(TyphoonEvent).where(TyphoonEvent.source == source)),
+        "observation_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.typhoon_id.in_(source_ids))),
+        "main_observation_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.track_type == "MAIN", TyphoonObservation.typhoon_id.in_(source_ids))),
         "years": [item[0] for item in yearly],
         "yearly": [{"year": item[0], "count": item[1]} for item in yearly],
         "yearly_all": [{"year": item[0], "count": item[1]} for item in yearly_all],
-        "provisional_observation_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.track_type.contains("PROVISIONAL"))),
-        "missing_cma_wind_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.cma_wind_ms.is_(None))),
+        "provisional_observation_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.track_type.contains("PROVISIONAL"), TyphoonObservation.typhoon_id.in_(source_ids))),
+        "missing_cma_wind_count": db.scalar(select(func.count()).select_from(TyphoonObservation).where(TyphoonObservation.cma_wind_ms.is_(None), TyphoonObservation.typhoon_id.in_(source_ids))),
         "last_import_at": last_import.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z") if last_import else None,
         "latest_job": job_dict(latest) if latest else None,
         "region_policy": "观测行 BASIN=WP，SEASON 与 UTC 时间均在 2014—2025；台风计数仅包含有 MAIN 轨迹的事件。",

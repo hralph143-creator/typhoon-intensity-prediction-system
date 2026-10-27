@@ -20,8 +20,8 @@ def require_event(db, event_id):
 
 
 @router.get("/statistics", summary="真实数据统计：MAIN事件数、全部保留观测数及缺测数")
-def get_statistics(db: Session = Depends(get_db)):
-    return ApiResponse(data=statistics(db))
+def get_statistics(source: str = Query("ibtracs", pattern="^(ibtracs|cma)$"), db: Session = Depends(get_db)):
+    return ApiResponse(data=statistics(db, source))
 
 
 @router.get("", summary="分页检索历史台风；最大风速仅取 MAIN 轨迹 CMA 2分钟平均，m/s")

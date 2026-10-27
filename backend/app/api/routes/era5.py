@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.config import settings
 from backend.app.services.era5_service import (build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
-    credential_status, list_files, list_jobs, preview_plans, register_file, retry_job, sample_statistics)
+    credential_status, download_public_sample, list_files, list_jobs, preview_plans, register_file, retry_job, sample_statistics)
 
 router = APIRouter(prefix="/era5", tags=["ERA5 风场"])
 
@@ -21,7 +21,21 @@ class DownloadRequest(BaseModel):
 
 
 @router.get("/status")
-def status(): return ok({**credential_status(),"disk_budget_gb":settings.era5_disk_budget_gb,"files":len(list_files())})
+def status():
+    files = list_files()
+    credentials = credential_status()
+    if files and not credentials["configured"]:
+        credentials["message"] = "公共 ARCO-ERA5 已连接；CDS 个人令牌仅用于官方 API 扩展下载。"
+    return ok({**credentials, "connected": bool(files), "access_mode": "public_arco" if files else None,
+        "public_arco_available": True, "disk_budget_gb": settings.era5_disk_budget_gb, "files": len(files)})
+
+
+@router.post("/public-sample")
+def public_sample():
+    try:
+        return ok(download_public_sample(), "公共 ARCO-ERA5 真实风场下载并构建完成")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(502, f"公共 ERA5 下载失败：{exc}") from exc
 
 
 @router.post("/connection-test")

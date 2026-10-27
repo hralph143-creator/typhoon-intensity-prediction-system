@@ -44,8 +44,8 @@ def main() -> int:
         print("请先运行 .venv\\Scripts\\python.exe -m pip install -r backend\\requirements.txt")
         return 1
 
-    if sys.version_info[:2] != (3, 12):
-        print("[错误] 请使用 Python 3.12 创建项目虚拟环境。")
+    if not (3, 11) <= sys.version_info[:2] <= (3, 12):
+        print("[错误] 请使用 Python 3.11 或 3.12。")
         return 1
     if not version(["node", "--version"]) or not version(["npm.cmd" if sys.platform == "win32" else "npm", "--version"]):
         print("[错误] 缺少 Node.js 或 npm，请安装 Node.js 22+ 后重试。")

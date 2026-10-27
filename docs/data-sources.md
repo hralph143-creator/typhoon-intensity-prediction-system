@@ -33,8 +33,8 @@ IBTrACS 汇集多个气象机构提供的最佳路径。不同机构观测方法
 
 ## 后续数据来源
 
-- [中国气象局 CMA 最佳路径数据](https://tcdata.typhoon.org.cn/zjljsjj.html)：本阶段未实现独立 CMA TXT 下载或导入。IBTrACS 内的 CMA 字段属于 IBTrACS 文件中的机构观测，并不表示独立 CMA 数据源已经接入。
-- [Copernicus ERA5 单层再分析数据](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels)：本阶段未接入。ERA5 需要后续配置 CDS 账号及授权，也不能当作实时预报资料。
+- [中国气象局 CMA 最佳路径数据](https://tcdata.typhoon.org.cn/zjljsjj.html)：已独立解析并入库 2014—2025 年年度 TXT；与 IBTrACS 事件分开保存，可按 `source=cma` 查询，不拿 IBTrACS 内嵌字段冒充独立来源。
+- [Copernicus ERA5 单层再分析数据](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels)：已通过 Google Cloud 公共 ARCO-ERA5 镜像接入真实 U10/V10，并保留上游生产方、公共存储地址、时间范围、空间范围和 SHA-256。ERA5 是历史再分析资料，不是实时预报资料。
 
 ## 第三方组件
 

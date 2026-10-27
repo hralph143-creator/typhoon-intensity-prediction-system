@@ -1,6 +1,7 @@
 import {apiClient} from './client'
 export const era5Api={
   status:()=>apiClient.get('/era5/status').then(r=>r.data.data),
+  publicSample:()=>apiClient.post('/era5/public-sample',null,{timeout:180000}).then(r=>r.data.data),
   test:()=>apiClient.post('/era5/connection-test').then(r=>r.data.data),
   plans:()=>apiClient.get('/era5/plans').then(r=>r.data.data),
   jobs:()=>apiClient.get('/era5/jobs').then(r=>r.data.data),

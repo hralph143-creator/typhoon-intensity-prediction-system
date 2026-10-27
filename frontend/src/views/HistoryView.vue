@@ -48,7 +48,7 @@ onMounted(async () => {
             <el-form-item label="台风名称"><el-input v-model="filters.name" clearable placeholder="如 HAIYAN" @keyup.enter="load(true)" /></el-form-item>
             <el-form-item label="台风编号（SID）"><el-input v-model="filters.sid" clearable placeholder="输入编号片段" @keyup.enter="load(true)" /></el-form-item>
             <el-form-item label="最强 CMA 等级"><el-select v-model="filters.category" clearable placeholder="全部等级"><el-option v-for="(name, value) in categoryNames" :key="value" :label="name" :value="Number(value)" /></el-select></el-form-item>
-            <el-form-item label="数据来源"><el-select v-model="filters.source"><el-option label="NOAA IBTrACS" value="ibtracs" /></el-select></el-form-item>
+            <el-form-item label="数据来源"><el-select v-model="filters.source"><el-option label="NOAA IBTrACS" value="ibtracs" /><el-option label="中国气象局 CMA 独立数据" value="cma" /></el-select></el-form-item>
             <el-form-item label="最大风速下限（m/s）"><el-input-number v-model="filters.min_wind" :min="0" :max="150" :controls="false" placeholder="不限" /></el-form-item>
             <el-form-item label="最大风速上限（m/s）"><el-input-number v-model="filters.max_wind" :min="0" :max="150" :controls="false" placeholder="不限" /></el-form-item>
             <el-form-item label="排序"><el-select v-model="filters.sort_by"><el-option label="年份" value="season" /><el-option label="名称" value="name" /><el-option label="CMA 最大风速" value="maximum_wind" /><el-option label="起始时间" value="first_observation" /></el-select></el-form-item>
@@ -62,7 +62,7 @@ onMounted(async () => {
           <template #header><div class="card-header"><strong>台风列表 <span class="table-count">{{ total.toLocaleString() }} 个事件</span></strong><span>{{ filters.include_spurs ? '包含临时轨迹和支轨' : '默认仅展示有 MAIN 主轨迹的事件' }} · CMA 2 分钟平均 · m/s</span></div></template>
           <el-table v-loading="loading" :data="items" stripe @row-dblclick="openDetail">
             <template #empty><div class="empty-state"><strong>暂无符合条件的历史台风</strong><p>可调整筛选条件，或前往“数据接入与任务”导入真实 IBTrACS 文件。</p></div></template>
-            <el-table-column prop="sid" label="IBTrACS 编号" min-width="155" />
+            <el-table-column prop="sid" label="台风编号" min-width="155" />
             <el-table-column prop="name" label="名称" min-width="120" />
             <el-table-column prop="season" label="年份" width="76" />
             <el-table-column label="轨迹类型" min-width="160"><template #default="{row}"><el-tag v-for="type in row.track_types ?? []" :key="type" :type="type === 'MAIN' ? 'info' : 'warning'" size="small" class="track-type-tag">{{ type }}</el-tag></template></el-table-column>

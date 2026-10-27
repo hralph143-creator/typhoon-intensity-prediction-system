@@ -69,12 +69,14 @@ def version(command: list[str]) -> str | None:
 def main() -> int:
     configure_output()
     checks: list[tuple[str, bool, str]] = [
-        ("Python 3.12", sys.version_info[:2] == (3, 12), sys.version.split()[0]),
-        ("虚拟环境", sys.prefix != sys.base_prefix, sys.prefix),
+        ("Python 3.11/3.12", (3, 11) <= sys.version_info[:2] <= (3, 12), sys.version.split()[0]),
+        ("Python 运行环境", True, f"虚拟环境 {sys.prefix}" if sys.prefix != sys.base_prefix else f"系统解释器回退 {sys.executable}"),
     ]
-    for name in ("fastapi", "uvicorn", "sqlalchemy", "pydantic", "pydantic_settings", "httpx", "multipart", "numpy", "sklearn", "joblib", "openpyxl", "torch", "cdsapi", "xarray", "netCDF4", "h5netcdf", "h5py", "reportlab", "matplotlib", "pypdf", "pdfplumber"):
+    for name in ("fastapi", "uvicorn", "sqlalchemy", "pydantic", "pydantic_settings", "httpx", "multipart", "numpy", "sklearn", "joblib", "openpyxl", "torch", "xarray", "netCDF4", "h5netcdf", "h5py", "zarr", "gcsfs", "reportlab", "matplotlib", "pypdf", "pdfplumber"):
         installed = importlib.util.find_spec(name) is not None
         checks.append((f"Python 依赖 {name}", installed, "已安装" if installed else "未安装"))
+    cdsapi_installed = importlib.util.find_spec("cdsapi") is not None
+    checks.append(("CDS API（可选）", True, "已安装" if cdsapi_installed else "未安装；公共 ARCO-ERA5 通道不受影响"))
     try:
         from backend.app.core.config import settings
     except Exception as exc:

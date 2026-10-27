@@ -14,6 +14,8 @@ openpyxl==3.1.5
 torch==2.14.1
 cdsapi>=0.7.7,<0.8
 xarray>=2025.1,<2027
+zarr>=3.1,<4
+gcsfs>=2025.9,<2027
 netCDF4>=1.7,<2
 h5netcdf>=1.6,<2
 h5py>=3.12,<4

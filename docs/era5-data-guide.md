@@ -2,7 +2,7 @@
 
 ## 官方来源与授权
 
-本系统使用 Copernicus Climate Data Store 的 `reanalysis-era5-single-levels`，仅请求 10 m U、V 风分量。官方当前仍支持 `cdsapi`；Windows 用户登录 CDS 后，将个人配置保存为 `%USERPROFILE%\.cdsapirc`：
+本系统使用 ECMWF/Copernicus ERA5 单层再分析数据，仅请求 10 m U、V 风分量。默认公共通道为 Google Cloud 公共数据集中的 ARCO-ERA5，可匿名读取；扩展通道仍支持 Copernicus Climate Data Store 的 `cdsapi`。Windows 用户登录 CDS 后，可将个人配置保存为 `%USERPROFILE%\.cdsapirc`：
 
 ```yaml
 url: https://cds.climate.copernicus.eu/api
@@ -11,7 +11,7 @@ key: <PERSONAL-ACCESS-TOKEN>
 
 令牌不得写入 `.env`、数据库、日志或 Git。还必须登录 ERA5 数据集页面手动接受 CC-BY 许可。配置页：<https://cds.climate.copernicus.eu/how-to-api>；数据集页：<https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels>。
 
-页面“检查连接”只返回是否已配置和客户端是否能初始化，不返回 URL 或令牌。未授权时系统不会创建伪下载任务。
+页面“检查 CDS 连接”只返回是否已配置和客户端是否能初始化，不返回 URL 或令牌。未授权时系统不会创建 CDS 伪下载任务，但可使用公共 ARCO-ERA5 通道取得真实数据。
 
 ## 小范围下载策略
 
@@ -39,4 +39,4 @@ NetCDF3/NetCDF4 均通过内存读取，以规避 Windows 中文路径的底层�
 
 ## 当前机器状态
 
-2026-10-26 检查结果：没有 `.cdsapirc`，也没有 `CDSAPI_URL/CDSAPI_KEY`，在线下载未执行；磁盘 C: 剩余约 90.72 GB。已安装 `cdsapi`、`xarray`、`netCDF4`、`h5netcdf` 和 `h5py`，可在授权后继续。
+2026-10-27 检查结果：没有 `.cdsapirc` 或 `CDSAPI_URL/CDSAPI_KEY`；公共 ARCO-ERA5 已成功读取并归档 1 个 NetCDF，覆盖 4 个 UTC 时次，质量有效率 100%，已构建 4 个单时次风场和 1 个 `4×2×31×31` 时空样本。CDS 个人令牌仍可在需要批量扩展时配置。

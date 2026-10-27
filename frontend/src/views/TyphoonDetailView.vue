@@ -90,7 +90,7 @@ onMounted(load)
         <el-table ref="tableRef" :data="tablePoints" highlight-current-row row-key="id" @row-click="selectRow">
           <el-table-column label="时间（UTC）" min-width="180"><template #default="{row}">{{ utc(row.observation_time).replace(' UTC','') }}</template></el-table-column>
           <el-table-column label="纬度／经度" min-width="145"><template #default="{row}">{{ numberText(row.latitude, 2) }} / {{ numberText(row.longitude, 2) }}</template></el-table-column>
-          <el-table-column label="CMA 原始风速 kn" min-width="130"><template #default="{row}">{{ numberText(row.cma_wind) }}</template></el-table-column>
+          <el-table-column label="CMA 原始风速" min-width="130"><template #default="{row}">{{ numberText(row.cma_wind) }} {{ row.wind_unit || 'knots' }}</template></el-table-column>
           <el-table-column label="CMA 风速 m/s" min-width="115"><template #default="{row}">{{ numberText(row.cma_wind_ms) }}</template></el-table-column>
           <el-table-column label="CMA 气压 hPa" min-width="120"><template #default="{row}">{{ numberText(row.cma_pressure, 0) }}</template></el-table-column>
           <el-table-column label="来源文件" width="100"><template #default="{row}">#{{ row.source_file_id }}</template></el-table-column>

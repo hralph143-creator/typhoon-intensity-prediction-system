@@ -57,6 +57,7 @@ export interface Observation {
   cma_wind_ms: number | null
   cma_pressure: number | null
   cma_category: number | null
+  wind_unit?: string
   wmo_wind_ms: number | null
   wmo_pressure: number | null
   wmo_agency: string | null
