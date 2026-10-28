@@ -138,6 +138,8 @@ docs/          项目文档
 
 ## 文档和使用边界
 
+第七阶段已完成跨源事件匹配、受控真实 ERA5 小样本扩充、三随机种子 SAF-Net 训练及五模型共同测试集程序。当前事件覆盖不足，结果明确标记为小样本试验，详见 [第七阶段实际验收报告](docs/phase-7-acceptance.md)。
+
 - [数据来源与署名](docs/data-sources.md)
 - [字段与清洗规则](docs/data-fields.md)
 - [下载和导入说明](docs/data-import.md)

@@ -2,6 +2,10 @@ import {apiClient} from './client'
 export const era5Api={
   status:()=>apiClient.get('/era5/status').then(r=>r.data.data),
   publicSample:()=>apiClient.post('/era5/public-sample',null,{timeout:180000}).then(r=>r.data.data),
+  batchPreview:(per_split=2)=>apiClient.get('/era5/public-batches/preview',{params:{per_split}}).then(r=>r.data.data),
+  createBatch:(per_split=2)=>apiClient.post('/era5/public-batches',null,{params:{per_split}}).then(r=>r.data.data),
+  batches:()=>apiClient.get('/era5/public-batches').then(r=>r.data.data),
+  cancelBatch:(id:string)=>apiClient.post(`/era5/public-batches/${id}/cancel`).then(r=>r.data.data),
   test:()=>apiClient.post('/era5/connection-test').then(r=>r.data.data),
   plans:()=>apiClient.get('/era5/plans').then(r=>r.data.data),
   jobs:()=>apiClient.get('/era5/jobs').then(r=>r.data.data),

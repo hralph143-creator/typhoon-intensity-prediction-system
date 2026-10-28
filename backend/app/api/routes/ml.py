@@ -16,6 +16,7 @@ from backend.app.services.ml_dataset import audit_data, build_samples, dataset_v
 from backend.app.services.ml_training import cancel_experiment, create_experiment, delete_experiment, get_experiment, historical_predict, list_experiments, list_models
 from backend.app.services.safnet_training import predict as safnet_predict, structure_info
 from backend.app.services.analysis_service import comparison_analysis, predictions
+from backend.app.services.fair_comparison import compare_common_test_set
 
 router = APIRouter(prefix="/ml", tags=["历史强度预测"])
 
@@ -115,6 +116,10 @@ def comparison():
 
 @router.get("/comparison/detail")
 def comparison_detail(): return ok(comparison_analysis())
+
+
+@router.get("/comparison/common-test")
+def common_test_comparison():return ok(compare_common_test_set())
 
 
 @router.get("/predictions")

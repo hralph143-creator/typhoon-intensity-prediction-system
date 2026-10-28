@@ -20,7 +20,11 @@ if /i "%~1"=="--no-browser" goto launch_no_browser
 "%APP_PYTHON%" scripts\launcher.py %*
 set "LAUNCH_EXIT=%ERRORLEVEL%"
 if not "%LAUNCH_EXIT%"=="0" goto launch_failed
-if "%~1"=="" start "" "http://127.0.0.1:5173/"
+if "%~1"=="" (
+    set "FRONTEND_URL=http://127.0.0.1:5173/"
+    if exist "logs\frontend-url.txt" set /p FRONTEND_URL=<"logs\frontend-url.txt"
+    start "" "%FRONTEND_URL%"
+)
 exit /b 0
 
 :launch_no_browser

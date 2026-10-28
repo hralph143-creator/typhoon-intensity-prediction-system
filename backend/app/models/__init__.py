@@ -6,3 +6,7 @@ from backend.app.models.report import AnalysisReport,SystemBackup
 
 __all__ = ["DataSource", "SystemConfig", "ImportJob", "SourceFile", "TyphoonEvent", "TyphoonObservation", "TrainingExperiment", "ModelArtifact", "EvaluationResult", "PredictionRecord", "AnalysisReport", "SystemBackup"]
 
+from backend.app.models.era5 import Era5SampleBatch
+from backend.app.models.typhoon import CrossSourceEventMatch
+
+__all__ += ["CrossSourceEventMatch", "Era5SampleBatch"]

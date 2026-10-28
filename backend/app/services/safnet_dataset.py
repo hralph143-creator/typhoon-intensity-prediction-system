@@ -34,7 +34,9 @@ def availability()->dict:
     groups={name:rows_for_split(name) for name in ("train","validation","test")}
     sids={name:{row.sid for row in rows} for name,rows in groups.items()}
     intersections={f"{a}_{b}":sorted(sids[a]&sids[b]) for i,a in enumerate(sids) for b in list(sids)[i+1:]}
-    return {"total":sum(map(len,groups.values())),"splits":{name:len(rows) for name,rows in groups.items()},"sid_intersections":intersections,"no_sid_leakage":all(not x for x in intersections.values()),"ready":all(groups.values())}
+    event_counts={name:len(value) for name,value in sids.items()}
+    formal_ready=event_counts["train"]>=20 and event_counts["validation"]>=5 and event_counts["test"]>=5
+    return {"total":sum(map(len,groups.values())),"splits":{name:len(rows) for name,rows in groups.items()},"events":event_counts,"sid_intersections":intersections,"no_sid_leakage":all(not x for x in intersections.values()),"ready":all(groups.values()) and all(not x for x in intersections.values()),"formal_ready":formal_ready,"experiment_level":"formal" if formal_ready else "experimental","limitations":[] if formal_ready else ["独立台风事件覆盖未达到 20/5/5 的初始正式实验目标","结果仅用于真实数据小样本工程验证，不支持泛化结论"]}
 
 
 def _read(row:SpatiotemporalSample)->tuple[np.ndarray,np.ndarray,np.float32]:

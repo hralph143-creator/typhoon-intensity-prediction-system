@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 
 from backend.app.core.config import settings
 from backend.app.db.database import SessionLocal
-from backend.app.models.era5 import Era5DownloadJob, Era5File, SpatiotemporalSample, WindFieldSample
+from backend.app.models.era5 import Era5DownloadJob, Era5File, Era5SampleBatch, SpatiotemporalSample, WindFieldSample
 from backend.app.models.typhoon import TyphoonEvent, TyphoonObservation
 from backend.app.services.ml_dataset import build_samples, dataset_version, split_statistics
 
@@ -31,6 +31,7 @@ OFFSETS = (18, 12, 6, 0)
 ACTIVE_JOB_STATUSES = {"queued", "submitting", "processing", "downloading", "validating"}
 _executor = ThreadPoolExecutor(max_workers=settings.era5_max_workers, thread_name_prefix="era5")
 _signals: dict[str, threading.Event] = {}
+_batch_signals: dict[str, threading.Event] = {}
 
 
 def _open_loaded(path: Path) -> xr.Dataset:
@@ -252,6 +253,123 @@ def download_public_sample() -> dict:
     return {"file": registered, "sample": {"sid": sample.sid, "forecast_time": _iso(sample.forecast_time)}, "build": built}
 
 
+def _public_plan(per_split: int = 2) -> list[dict]:
+    """按集合和独立事件优先选样，避免同一台风的高度重叠窗口占满批次。"""
+    existing={(row.sid,row.forecast_time) for row in _spatiotemporal_rows()}
+    selected=[]
+    for split in ("train","validation","test"):
+        seen=set()
+        for sample in build_samples("strict"):
+            if sample.split!=split or sample.sid in seen or (sample.sid,sample.forecast_time) in existing:continue
+            selected.append({"sid":sample.sid,"typhoon_id":sample.typhoon_id,"split":split,"forecast_time":_iso(sample.forecast_time),"target_time":_iso(sample.target_time),"estimated_bytes":100_000})
+            seen.add(sample.sid)
+            if len(seen)>=per_split:break
+    return selected
+
+
+def _spatiotemporal_rows():
+    with SessionLocal() as db:return list(db.scalars(select(SpatiotemporalSample)))
+
+
+def public_batch_preview(per_split:int=2)->dict:
+    plan=_public_plan(per_split);estimated=sum(x["estimated_bytes"] for x in plan)
+    free=shutil.disk_usage(settings.era5_raw_dir.parent if settings.era5_raw_dir.parent.exists() else settings.era5_raw_dir.parents[1]).free
+    return {"plan":plan,"samples":len(plan),"estimated_bytes":estimated,"disk_free_bytes":free,"disk_budget_bytes":int(settings.era5_disk_budget_gb*1024**3),"max_concurrency":settings.era5_max_workers,"access":"Google Cloud public ARCO-ERA5 (ECMWF/Copernicus)","warning":"估算仅含本地归档；公共云访问仍可能受网络限制。"}
+
+
+def _sample_by_key(sid:str,forecast_time:str):
+    wanted=datetime.fromisoformat(forecast_time.replace("Z","+00:00")).replace(tzinfo=None)
+    return next((x for x in build_samples("strict") if x.sid==sid and x.forecast_time==wanted),None)
+
+
+def _archive_public_sample(sample, dataset:xr.Dataset)->dict:
+    moments=[sample.forecast_time-timedelta(hours=h) for h in OFFSETS]
+    with SessionLocal() as db:
+        rows=list(db.scalars(select(TyphoonObservation).where(TyphoonObservation.typhoon_id==sample.typhoon_id,TyphoonObservation.observation_time.in_(moments),TyphoonObservation.track_type=="MAIN")))
+    by_time={x.observation_time:x for x in rows}
+    if any(moment not in by_time for moment in moments):raise ValueError("严格样本缺少四个历史轨迹中心")
+    centers=[(by_time[m].cma_lat or by_time[m].latitude,by_time[m].cma_lon or by_time[m].longitude) for m in moments]
+    if any(lon<0 or lon>360 for _,lon in centers):raise ValueError("当前公共批次暂不处理跨日界线归档")
+    north=np.ceil((max(x[0] for x in centers)+4)*4)/4;south=np.floor((min(x[0] for x in centers)-4)*4)/4
+    west=np.floor((min(x[1] for x in centers)-4)*4)/4;east=np.ceil((max(x[1] for x in centers)+4)*4)/4
+    variables=["10m_u_component_of_wind","10m_v_component_of_wind"]
+    subset=dataset[variables].sel(time=np.asarray(moments,dtype="datetime64[ns]"),latitude=slice(north,south),longitude=slice(west,east)).load().rename({variables[0]:"u10",variables[1]:"v10"})
+    subset["u10"].attrs["units"]="m s**-1";subset["v10"].attrs["units"]="m s**-1"
+    temporary=settings.era5_raw_dir/f"arco-era5-{sample.sid}-{sample.forecast_time:%Y%m%d%H}.tmp.nc"
+    request={"source":"google_public_arco_era5","upstream_producer":"ECMWF Copernicus Climate Change Service","public_store":PUBLIC_ARCO_URL,"sid":sample.sid,"times":[_iso(x) for x in moments],"area":[float(north),float(west),float(south),float(east)],"variables":variables,"processing_version":PROCESSING_VERSION}
+    try:
+        subset.to_netcdf(temporary,engine="h5netcdf");return register_file(temporary,temporary.name.replace(".tmp",""),request)
+    finally:temporary.unlink(missing_ok=True);subset.close()
+
+
+def create_public_batch(per_split:int=2)->dict:
+    if per_split<1 or per_split>10:raise ValueError("每个集合批量数必须为 1—10")
+    preview=public_batch_preview(per_split)
+    if not preview["plan"]:raise ValueError("没有新的可选严格样本")
+    used=sum(p.stat().st_size for p in settings.era5_raw_dir.glob("*") if p.is_file()) if settings.era5_raw_dir.exists() else 0
+    if used+preview["estimated_bytes"]>preview["disk_budget_bytes"] or preview["disk_free_bytes"]<preview["estimated_bytes"]*2:raise ValueError("磁盘预算不足，未创建批次")
+    batch_id=str(uuid4())
+    with SessionLocal() as db:
+        db.add(Era5SampleBatch(id=batch_id,status="queued",requested=len(preview["plan"]),estimated_bytes=preview["estimated_bytes"],plan=preview["plan"]));db.commit()
+    signal=threading.Event();_batch_signals[batch_id]=signal;_executor.submit(_run_public_batch,batch_id,signal)
+    return get_public_batch(batch_id)
+
+
+def _run_public_batch(batch_id:str,signal:threading.Event):
+    errors=[];completed=actual=0;dataset=None
+    try:
+        with SessionLocal() as db:
+            row=db.get(Era5SampleBatch,batch_id);row.status="running";row.started_at=datetime.now(UTC);plan=list(row.plan);db.commit()
+        dataset=xr.open_zarr(PUBLIC_ARCO_URL,chunks=None,consolidated=True)
+        for item in plan:
+            if signal.is_set():raise InterruptedError("用户取消批次")
+            try:
+                sample=_sample_by_key(item["sid"],item["forecast_time"])
+                if not sample:raise ValueError("严格样本清单中不存在")
+                result=_archive_public_sample(sample,dataset);completed+=1;actual+=int(result["file_size"])
+            except Exception as exc:errors.append({"sid":item["sid"],"forecast_time":item["forecast_time"],"error":f"{type(exc).__name__}: {exc}"})
+            with SessionLocal() as db:
+                row=db.get(Era5SampleBatch,batch_id);row.completed=completed;row.failed=len(errors);row.actual_bytes=actual;row.errors=errors;db.commit()
+        keys={(x["sid"],datetime.fromisoformat(x["forecast_time"].replace("Z","+00:00")).replace(tzinfo=None)) for x in plan}
+        built=build_spatiotemporal_samples(sample_keys=keys)
+        with SessionLocal() as db:
+            row=db.get(Era5SampleBatch,batch_id);row.status="succeeded" if not errors else "partial";row.finished_at=datetime.now(UTC);row.errors=errors+([{"build":built}] if built else []);db.commit()
+    except InterruptedError as exc:
+        with SessionLocal() as db:
+            row=db.get(Era5SampleBatch,batch_id);row.status="cancelled";row.finished_at=datetime.now(UTC);row.errors=errors+[{"error":str(exc)}];db.commit()
+    except Exception as exc:
+        with SessionLocal() as db:
+            row=db.get(Era5SampleBatch,batch_id);row.status="failed";row.finished_at=datetime.now(UTC);row.errors=errors+[{"error":f"{type(exc).__name__}: {exc}"}];db.commit()
+    finally:
+        if dataset is not None:dataset.close()
+        _batch_signals.pop(batch_id,None)
+
+
+def _batch_dict(row):
+    return {c.name:_iso(getattr(row,c.name)) for c in Era5SampleBatch.__table__.columns}
+
+
+def get_public_batch(batch_id:str)->dict:
+    with SessionLocal() as db:
+        row=db.get(Era5SampleBatch,batch_id)
+        if not row:raise LookupError("批次不存在")
+        return _batch_dict(row)
+
+
+def list_public_batches()->list[dict]:
+    with SessionLocal() as db:return [_batch_dict(x) for x in db.scalars(select(Era5SampleBatch).order_by(Era5SampleBatch.created_at.desc()))]
+
+
+def cancel_public_batch(batch_id:str)->dict:
+    with SessionLocal() as db:
+        row=db.get(Era5SampleBatch,batch_id)
+        if not row:raise LookupError("批次不存在")
+        row.cancel_requested=True;db.commit()
+    signal=_batch_signals.get(batch_id)
+    if signal:signal.set()
+    return get_public_batch(batch_id)
+
+
 def _normalized(ds: xr.Dataset, lat: str, lon: str) -> xr.Dataset:
     ds = ds.sortby(lat)
     values = ((np.asarray(ds[lon].values, float) + 180) % 360) - 180
@@ -293,8 +411,9 @@ def _find_covering_file(files: list[Era5File], moment: datetime, lat: float, lon
     return None
 
 
-def build_spatiotemporal_samples(limit: int | None = None) -> dict:
+def build_spatiotemporal_samples(limit: int | None = None, sample_keys: set[tuple[str, datetime]] | None = None) -> dict:
     samples = build_samples("strict")
+    if sample_keys is not None: samples=[x for x in samples if (x.sid,x.forecast_time) in sample_keys]
     if limit: samples = samples[:limit]
     built = skipped = reused = 0
     reasons: dict[str, int] = {}

@@ -53,8 +53,8 @@ def backend_is_ours(host: str, port: int, name: str, database_path: str) -> bool
     )
 
 
-def frontend_is_ours() -> bool:
-    package = fetch_json("http://127.0.0.1:5173/package.json")
+def frontend_is_ours(port: int = 5173) -> bool:
+    package = fetch_json(f"http://127.0.0.1:{port}/package.json")
     return bool(package and package.get("name") == "typhoon-prediction-frontend")
 
 
@@ -110,9 +110,9 @@ def main() -> int:
     backend_free = port_available(settings.app_port, probe_host)
     backend_running = backend_is_ours(probe_host, settings.app_port, settings.app_name, str(database)) if not backend_free else False
     checks.append((f"后端端口 {settings.app_port}", backend_free or backend_running, "可用" if backend_free else "本项目服务正常运行" if backend_running else "被其他服务占用或本项目未就绪"))
-    frontend_free = port_available(5173)
-    frontend_running = frontend_is_ours() if not frontend_free else False
-    checks.append(("前端端口 5173", frontend_free or frontend_running, "可用" if frontend_free else "本项目服务正常运行" if frontend_running else "被其他服务占用"))
+    frontend_running_port=next((port for port in range(5173,5184) if not port_available(port) and frontend_is_ours(port)),None)
+    frontend_free_port=next((port for port in range(5173,5184) if port_available(port)),None)
+    checks.append(("前端端口", bool(frontend_running_port or frontend_free_port), f"本项目服务正常运行（{frontend_running_port}）" if frontend_running_port else f"可用端口 {frontend_free_port}" if frontend_free_port else "5173—5183 均被占用"))
 
     print("\n云浪智析 · 环境健康检查\n" + "=" * 62)
     for label, passed, detail in checks:

@@ -40,6 +40,7 @@ def test_run_bat_is_windows_safe_and_opens_application():
     assert content.startswith(b"\xef\xbb\xbf@echo off\r\n")
     assert content.count(b"\n")==content.count(b"\r\n")
     text=content.decode("utf-8-sig")
-    assert 'start "" "http://127.0.0.1:5173/"' in text
+    assert 'set /p FRONTEND_URL=<"logs\\frontend-url.txt"' in text
+    assert 'start "" "%FRONTEND_URL%"' in text
     assert '"%~1"=="--no-browser"' in text
     assert "CLOUDWAVE_NO_PAUSE" in text

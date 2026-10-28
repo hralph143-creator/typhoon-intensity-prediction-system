@@ -85,3 +85,21 @@ class SpatiotemporalSample(Base):
     quality_report: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     processing_version: Mapped[str] = mapped_column(String(32), default="spatiotemporal-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class Era5SampleBatch(Base):
+    """受资源预算约束、可恢复的公共 ARCO 样本准备批次。"""
+    __tablename__ = "era5_sample_batches"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    status: Mapped[str] = mapped_column(String(24), default="planned", index=True)
+    requested: Mapped[int] = mapped_column(Integer, default=0)
+    completed: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    actual_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    plan: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    errors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

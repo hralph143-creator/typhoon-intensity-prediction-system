@@ -100,7 +100,7 @@ def _run(experiment_id,signal):
         datasets={key:SAFNetDataset(rows,normalization) for key,rows in groups.items()};generator=torch.Generator().manual_seed(int(values["seed"]))
         loaders={key:DataLoader(ds,batch_size=int(values["batch_size"]),shuffle=key=="train",generator=generator if key=="train" else None) for key,ds in datasets.items()}
         model=SAFNet(config).to(device);optimizer=torch.optim.Adam(model.parameters(),lr=float(values["learning_rate"]));loss_fn=nn.MSELoss();best=float("inf");best_state=None;remaining=int(values["patience"]);curve=[]
-        artifact_dir.mkdir(parents=True,exist_ok=False);version="era5-spatiotemporal-v1";stats={key:{"sample_count":len(rows),"event_count":len({r.sid for r in rows})} for key,rows in groups.items()}
+        artifact_dir.mkdir(parents=True,exist_ok=False);state=availability();version="era5-spatiotemporal-v1";stats={key:{"sample_count":len(rows),"event_count":len({r.sid for r in rows})} for key,rows in groups.items()};stats["experiment_level"]=state["experiment_level"];stats["limitations"]=state["limitations"]
         _save(experiment_id,status="training",phase="training",progress=5,artifact_dir=str(artifact_dir),dataset_version=version,split_statistics=stats,device=str(device))
         for epoch in range(1,int(values["epochs"])+1):
             _check(signal);model.train();total=0.0
@@ -124,7 +124,7 @@ def _run(experiment_id,signal):
             predicted=_predict(model,evaluation_loader,device,normalization);samples=[SimpleNamespace(sid=r.sid,season=r.forecast_time.year,forecast_time=r.forecast_time,target_time=r.target_time,target=r.target_wind,winds=(0,0,0,r.temporal_features[3])) for r in rows]
             metrics[split]=evaluation_details(samples,predicted)
         checkpoint={"state_dict":best_state,"config":config.serializable(),"normalization":normalization.serializable(),"format_version":1};model_path=artifact_dir/"safnet.pt";torch.save(checkpoint,model_path)
-        checksum=hashlib.sha256(model_path.read_bytes()).hexdigest();metadata={"experiment_id":experiment_id,"model_type":"safnet","dataset_version":version,"config":config.serializable(),"normalization":normalization.serializable(),"parameters":parameter_report(model),"sha256":checksum,"training_seconds":time.perf_counter()-started,"created_at":datetime.now(UTC).isoformat()}
+        checksum=hashlib.sha256(model_path.read_bytes()).hexdigest();metadata={"experiment_id":experiment_id,"model_type":"safnet","dataset_version":version,"experiment_level":state["experiment_level"],"limitations":state["limitations"],"config":config.serializable(),"normalization":normalization.serializable(),"parameters":parameter_report(model),"sha256":checksum,"training_seconds":time.perf_counter()-started,"python_version":__import__('sys').version,"pytorch_version":torch.__version__,"device":str(device),"seed":int(values["seed"]),"created_at":datetime.now(UTC).isoformat()}
         metadata_path=artifact_dir/"metadata.json";metadata_path.write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding="utf-8")
         model_id=str(uuid4())
         with SessionLocal() as db:
@@ -157,7 +157,8 @@ def predict(model_id:str,sample_id:str,include_attention:bool=False)->dict:
         event=db.get(TyphoonEvent,sample.typhoon_id);model,normalization,metadata=load_model(artifact);wind,temporal=_sample_tensors(sample,normalization)
         with torch.no_grad():prediction,attention=model(wind,temporal,return_attention=True)
         predicted=float(prediction.item()*normalization.target_std+normalization.target_mean);error=predicted-sample.target_wind
-        record=PredictionRecord(id=str(uuid4()),model_id=model_id,typhoon_id=sample.typhoon_id,sid=sample.sid,forecast_time=sample.forecast_time,target_time=sample.target_time,predicted_wind=predicted,actual_wind=sample.target_wind,error=error,input_features={"spatiotemporal_sample_id":sample.id,"wind_field_ids":sample.wind_field_ids},quality_profile="strict");db.add(record);db.commit()
+        record=PredictionRecord(id=str(uuid4()),model_id=model_id,typhoon_id=sample.typhoon_id,sid=sample.sid,forecast_time=sample.forecast_time,target_time=sample.target_time,predicted_wind=predicted,actual_wind=sample.target_wind,error=error,input_features={"spatiotemporal_sample_id":sample.id,"wind_field_ids":sample.wind_field_ids},quality_profile="strict");db.add(record);db.commit();db.refresh(record);db.refresh(sample);db.refresh(artifact)
+        if event:db.refresh(event)
     result={"id":record.id,"sample_id":sample.id,"sid":sample.sid,"name":event.name if event else sample.sid,"forecast_time":_utc(sample.forecast_time),"target_time":_utc(sample.target_time),"predicted_wind":predicted,"actual_wind":sample.target_wind,"error":error,"model_id":model_id,"model_name":artifact.name,"model_type":"safnet","model_version":metadata["dataset_version"],"data_source":"NOAA IBTrACS CMA + Copernicus ERA5 U10/V10","config":metadata["config"],"status":"historical_backtest"}
     if include_attention:result["attention"]={"spatial":attention["spatial"].squeeze(0).squeeze(1).tolist(),"temporal":attention["temporal"].squeeze(0).tolist(),"note":"注意力仅反映网络内部关注模式，不代表气象因果关系。"}
     return result

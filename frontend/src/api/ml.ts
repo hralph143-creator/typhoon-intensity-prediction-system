@@ -13,6 +13,7 @@ export const deleteExperiment = (id:string) => apiClient.delete(`/ml/experiments
 export const getModels = () => get<ModelArtifact[]>('/ml/models')
 export const getComparison = () => get<Array<{model_id:string;experiment_id:string;name:string;model_type:string;mae:number;rmse:number;bias:number;improvement_pct:number|null}>>('/ml/comparison')
 export const getComparisonDetail = () => get<any>('/ml/comparison/detail')
+export const getCommonTestComparison = () => get<any>('/ml/comparison/common-test')
 export const getPredictionRecords = (params?:object) => get<any>('/ml/predictions',params)
 export const historicalPredict = (data:object) => post<BacktestResult>('/ml/predict',data)
 export const getSafnetInfo = () => get<any>('/ml/safnet/info')

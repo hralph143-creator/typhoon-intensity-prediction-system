@@ -56,12 +56,18 @@ def main() -> int:
 
     host = "127.0.0.1" if settings.app_host in ("0.0.0.0", "::") else settings.app_host
     backend_free = port_available(settings.app_port, host)
-    frontend_free = port_available(5173)
+    frontend_port = next((port for port in range(5173, 5184) if not port_available(port) and frontend_is_ours(port)), None)
+    if frontend_port is None:
+        frontend_port = next((port for port in range(5173, 5184) if port_available(port)), None)
+    if frontend_port is None:
+        print("[错误] 前端端口 5173—5183 均被占用。")
+        return 1
+    frontend_free = port_available(frontend_port)
     backend_ready = backend_is_ours(host, settings.app_port, settings.app_name, str(settings.database_path)) if not backend_free else False
-    frontend_ready = frontend_is_ours() if not frontend_free else False
+    frontend_ready = frontend_is_ours(frontend_port) if not frontend_free else False
     for port, available, ready, label in (
         (settings.app_port, backend_free, backend_ready, "后端"),
-        (5173, frontend_free, frontend_ready, "前端"),
+        (frontend_port, frontend_free, frontend_ready, "前端"),
     ):
         if not available and not ready:
             print(f"[错误] {label}端口 {port} 已被其他服务占用，或本项目服务尚未就绪。")
@@ -88,15 +94,17 @@ def main() -> int:
                     cwd=ROOT, env=runtime_env, creationflags=flags, stdout=backend_log, stderr=subprocess.STDOUT,
                 ))
             if not frontend_ready:
-                command = ["cmd.exe", "/d", "/c", "npm.cmd", "run", "dev"] if sys.platform == "win32" else ["npm", "run", "dev"]
+                command = (["cmd.exe", "/d", "/c", "npm.cmd", "run", "dev", "--", "--port", str(frontend_port)] if sys.platform == "win32" else ["npm", "run", "dev", "--", "--port", str(frontend_port)])
                 created.append(subprocess.Popen(command, cwd=ROOT / "frontend", env=runtime_env, creationflags=flags, stdout=frontend_log, stderr=subprocess.STDOUT))
         deadline = time.monotonic() + 35
         while time.monotonic() < deadline:
             backend_ready = backend_is_ours(host, settings.app_port, settings.app_name, str(settings.database_path))
-            frontend_ready = frontend_is_ours()
+            frontend_ready = frontend_is_ours(frontend_port)
             if backend_ready and frontend_ready:
                 print("[成功] 后端、数据库和前端服务均已就绪。")
-                print("前端地址：http://127.0.0.1:5173")
+                frontend_url=f"http://127.0.0.1:{frontend_port}/"
+                (ROOT / "logs" / "frontend-url.txt").write_text(frontend_url,encoding="utf-8")
+                print(f"前端地址：{frontend_url}")
                 print(f"API 文档：http://{host}:{settings.app_port}/docs")
                 print("服务日志：logs/backend-console.log、logs/frontend-console.log")
                 return 0

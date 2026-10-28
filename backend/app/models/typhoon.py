@@ -112,3 +112,23 @@ class TyphoonObservation(Base):
     raw_values: Mapped[dict[str, Any]] = mapped_column(JSON)
     source_file_id: Mapped[int] = mapped_column(ForeignKey("source_files.id"))
     row_hash: Mapped[str] = mapped_column(String(64))
+
+
+class CrossSourceEventMatch(Base):
+    """可重新计算的 IBTrACS/CMA 事件关联审计记录。"""
+    __tablename__ = "cross_source_event_matches"
+    __table_args__ = (
+        UniqueConstraint("ibtracs_event_id", "cma_event_id", "algorithm_version", name="uq_cross_source_match"),
+        Index("ix_cross_source_match_status", "status", "confidence"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ibtracs_event_id: Mapped[int] = mapped_column(ForeignKey("typhoon_events.id"), index=True)
+    cma_event_id: Mapped[int] = mapped_column(ForeignKey("typhoon_events.id"), index=True)
+    ibtracs_sid: Mapped[str] = mapped_column(String(32), index=True)
+    cma_sid: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    confidence: Mapped[float] = mapped_column(Float)
+    basis: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    conflict: Mapped[bool] = mapped_column(Boolean, default=False)
+    algorithm_version: Mapped[str] = mapped_column(String(32), default="event-match-v1")
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

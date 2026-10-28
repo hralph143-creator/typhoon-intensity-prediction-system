@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 
 from backend.app.core.config import settings
 from backend.app.services.era5_service import (build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
-    credential_status, download_public_sample, list_files, list_jobs, preview_plans, register_file, retry_job, sample_statistics)
+    cancel_public_batch, create_public_batch, credential_status, download_public_sample, get_public_batch, list_files,
+    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, retry_job, sample_statistics)
 
 router = APIRouter(prefix="/era5", tags=["ERA5 风场"])
 
@@ -36,6 +37,32 @@ def public_sample():
         return ok(download_public_sample(), "公共 ARCO-ERA5 真实风场下载并构建完成")
     except (OSError, RuntimeError, ValueError) as exc:
         raise HTTPException(502, f"公共 ERA5 下载失败：{exc}") from exc
+
+
+@router.get("/public-batches/preview")
+def batch_preview(per_split:int=Query(2,ge=1,le=10)):return ok(public_batch_preview(per_split))
+
+
+@router.post("/public-batches",status_code=202)
+def create_batch(per_split:int=Query(2,ge=1,le=10)):
+    try:return ok(create_public_batch(per_split),"公共 ERA5 受控批次已创建")
+    except ValueError as exc:raise HTTPException(409,str(exc))
+
+
+@router.get("/public-batches")
+def batches():return ok(list_public_batches())
+
+
+@router.get("/public-batches/{batch_id}")
+def batch(batch_id:str):
+    try:return ok(get_public_batch(batch_id))
+    except LookupError as exc:raise HTTPException(404,str(exc))
+
+
+@router.post("/public-batches/{batch_id}/cancel")
+def cancel_batch(batch_id:str):
+    try:return ok(cancel_public_batch(batch_id),"已请求取消批次")
+    except LookupError as exc:raise HTTPException(404,str(exc))
 
 
 @router.post("/connection-test")
