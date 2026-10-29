@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 from backend.app.core.config import settings
 from backend.app.services.era5_service import (build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
     cancel_public_batch, create_public_batch, credential_status, download_public_sample, get_public_batch, list_files,
-    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, retry_job, sample_statistics)
+    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, resume_public_batch, retry_job, sample_statistics)
+from backend.app.services.phase8_service import data_quality_audit, freeze_dataset
 
 router = APIRouter(prefix="/era5", tags=["ERA5 风场"])
 
@@ -63,6 +64,13 @@ def batch(batch_id:str):
 def cancel_batch(batch_id:str):
     try:return ok(cancel_public_batch(batch_id),"已请求取消批次")
     except LookupError as exc:raise HTTPException(404,str(exc))
+
+
+@router.post("/public-batches/{batch_id}/resume",status_code=202)
+def resume_batch(batch_id:str):
+    try:return ok(resume_public_batch(batch_id),"批次已从断点恢复")
+    except LookupError as exc:raise HTTPException(404,str(exc))
+    except ValueError as exc:raise HTTPException(409,str(exc))
 
 
 @router.post("/connection-test")
@@ -122,3 +130,13 @@ def build(limit:int|None=Query(None,ge=1,le=10000)):
 
 @router.get("/samples/statistics")
 def statistics():return ok(sample_statistics())
+
+
+@router.get("/samples/audit")
+def phase8_audit():return ok(data_quality_audit())
+
+
+@router.post("/samples/freeze")
+def freeze_phase8_dataset():
+    try:return ok(freeze_dataset(),"第八阶段数据清单已冻结")
+    except ValueError as exc:raise HTTPException(409,str(exc))

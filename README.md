@@ -140,6 +140,8 @@ docs/          项目文档
 
 第七阶段已完成跨源事件匹配、受控真实 ERA5 小样本扩充、三随机种子 SAF-Net 训练及五模型共同测试集程序。当前事件覆盖不足，结果明确标记为小样本试验，详见 [第七阶段实际验收报告](docs/phase-7-acceptance.md)。
 
+第八阶段新增版本化数据质量门禁、SHA-256 冻结清单、ARCO 远程读取预算、独立事件优先选样、批次断点恢复及事件簇 Bootstrap。ARCO 分析就绪存储按单时次全局空间块组织，小范围切片仍可能产生显著读取放大，因此默认每组仅 1 条、单并发且单批保守远程预算 4 GiB；未达到 50/20/20 时系统继续标记为工程性小样本试验。详见 [第八阶段验收报告](docs/phase-8-acceptance.md)。
+
 - [数据来源与署名](docs/data-sources.md)
 - [字段与清洗规则](docs/data-fields.md)
 - [下载和导入说明](docs/data-import.md)
@@ -166,6 +168,7 @@ docs/          项目文档
 - [运行维护](docs/operations.md)
 - [软件功能总览](docs/software-features.md)
 - [第六阶段验收报告](docs/phase-6-acceptance.md)
+- [第八阶段验收报告](docs/phase-8-acceptance.md)
 
 当前同时保存 NOAA IBTrACS 中的 CMA 字段和独立 CMA TXT 数据源，查询时可切换来源。ERA5 已通过公共 ARCO 镜像接入，CDS 个人授权仅作为扩展下载方式。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 

@@ -17,6 +17,7 @@ def migrate(engine: Engine) -> None:
         (4, "era5_spatiotemporal_samples", (Era5File.__table__, Era5DownloadJob.__table__, WindFieldSample.__table__, SpatiotemporalSample.__table__)),
         (5, "research_reports_and_backups", (AnalysisReport.__table__, SystemBackup.__table__)),
         (6, "phase_seven_fusion_and_batches", (CrossSourceEventMatch.__table__, Era5SampleBatch.__table__)),
+        (7, "phase_eight_scale_batch_metadata", (Era5SampleBatch.__table__,)),
     )
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"))
@@ -38,3 +39,15 @@ def migrate(engine: Engine) -> None:
                 cma_iflag = substr(json_extract(raw_values, '$.IFLAG'), 3, 1)
             WHERE iflag IS NULL OR cma_iflag IS NULL
         """))
+        batch_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(era5_sample_batches)"))}
+        additions = {
+            "estimated_remote_bytes": "INTEGER NOT NULL DEFAULT 0",
+            "remote_requests": "INTEGER NOT NULL DEFAULT 0",
+            "cache_hits": "INTEGER NOT NULL DEFAULT 0",
+            "cursor": "INTEGER NOT NULL DEFAULT 0",
+            "duration_seconds": "FLOAT",
+            "processing_version": "VARCHAR(32) NOT NULL DEFAULT 'spatiotemporal-v2'",
+        }
+        for column, definition in additions.items():
+            if column not in batch_columns:
+                connection.execute(text(f"ALTER TABLE era5_sample_batches ADD COLUMN {column} {definition}"))

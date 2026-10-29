@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     app_name: str = "基于时空注意力的台风强度预测系统"
     app_brand: str = "云浪智析"
-    app_version: str = "0.6.0"
+    app_version: str = "0.8.0"
     app_env: str = "development"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     training_cpu_threads: int = 2
     era5_max_workers: int = 1
     era5_disk_budget_gb: float = 20.0
+    era5_remote_batch_budget_gb: float = 4.0
+    era5_batch_max_samples: int = 12
+    era5_batch_timeout_seconds: int = 1800
+    era5_cache_budget_gb: float = 5.0
+    era5_min_free_memory_gb: float = 1.5
 
     @property
     def raw_data_dir(self) -> Path:

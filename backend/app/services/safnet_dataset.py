@@ -26,8 +26,12 @@ class Normalization:
     def serializable(self)->dict:return {key:list(value) if isinstance(value,tuple) else value for key,value in self.__dict__.items()}
 
 
-def rows_for_split(split:str)->list[SpatiotemporalSample]:
-    with SessionLocal() as db:return list(db.scalars(select(SpatiotemporalSample).where(SpatiotemporalSample.split==split).order_by(SpatiotemporalSample.forecast_time)))
+def rows_for_split(split:str,processing_version:str|None=None)->list[SpatiotemporalSample]:
+    with SessionLocal() as db:
+        version=processing_version
+        if version is None:
+            version="spatiotemporal-v2" if db.scalar(select(SpatiotemporalSample.id).where(SpatiotemporalSample.processing_version=="spatiotemporal-v2").limit(1)) else "spatiotemporal-v1"
+        return list(db.scalars(select(SpatiotemporalSample).where(SpatiotemporalSample.split==split,SpatiotemporalSample.processing_version==version).order_by(SpatiotemporalSample.forecast_time)))
 
 
 def availability()->dict:
@@ -35,8 +39,9 @@ def availability()->dict:
     sids={name:{row.sid for row in rows} for name,rows in groups.items()}
     intersections={f"{a}_{b}":sorted(sids[a]&sids[b]) for i,a in enumerate(sids) for b in list(sids)[i+1:]}
     event_counts={name:len(value) for name,value in sids.items()}
-    formal_ready=event_counts["train"]>=20 and event_counts["validation"]>=5 and event_counts["test"]>=5
-    return {"total":sum(map(len,groups.values())),"splits":{name:len(rows) for name,rows in groups.items()},"events":event_counts,"sid_intersections":intersections,"no_sid_leakage":all(not x for x in intersections.values()),"ready":all(groups.values()) and all(not x for x in intersections.values()),"formal_ready":formal_ready,"experiment_level":"formal" if formal_ready else "experimental","limitations":[] if formal_ready else ["独立台风事件覆盖未达到 20/5/5 的初始正式实验目标","结果仅用于真实数据小样本工程验证，不支持泛化结论"]}
+    sample_counts={name:len(rows) for name,rows in groups.items()}
+    formal_ready=(sample_counts["train"]>=50 and sample_counts["validation"]>=20 and sample_counts["test"]>=20 and event_counts["train"]>=20 and event_counts["validation"]>=5 and event_counts["test"]>=5)
+    return {"total":sum(map(len,groups.values())),"splits":sample_counts,"events":event_counts,"sid_intersections":intersections,"no_sid_leakage":all(not x for x in intersections.values()),"ready":all(groups.values()) and all(not x for x in intersections.values()),"formal_ready":formal_ready,"experiment_level":"formal" if formal_ready else "experimental","limitations":[] if formal_ready else ["样本/事件未同时达到 50/20/20 与 20/5/5 的工程验证门槛","结果仅用于真实数据小样本工程验证，不支持泛化结论"]}
 
 
 def _read(row:SpatiotemporalSample)->tuple[np.ndarray,np.ndarray,np.float32]:

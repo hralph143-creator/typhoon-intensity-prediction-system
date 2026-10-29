@@ -26,8 +26,8 @@ async def lifespan(_: FastAPI):
     recover_interrupted_jobs()
     from backend.app.services.ml_training import recover_training_jobs
     recover_training_jobs()
-    from backend.app.services.era5_service import recover_download_jobs
-    recover_download_jobs()
+    from backend.app.services.era5_service import recover_download_jobs, recover_public_batches
+    recover_download_jobs(); recover_public_batches()
     from backend.app.services.report_service import recover_reports
     recover_reports()
     logger.info("数据库初始化完成，应用已启动")

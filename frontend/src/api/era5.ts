@@ -6,6 +6,7 @@ export const era5Api={
   createBatch:(per_split=2)=>apiClient.post('/era5/public-batches',null,{params:{per_split}}).then(r=>r.data.data),
   batches:()=>apiClient.get('/era5/public-batches').then(r=>r.data.data),
   cancelBatch:(id:string)=>apiClient.post(`/era5/public-batches/${id}/cancel`).then(r=>r.data.data),
+  resumeBatch:(id:string)=>apiClient.post(`/era5/public-batches/${id}/resume`).then(r=>r.data.data),
   test:()=>apiClient.post('/era5/connection-test').then(r=>r.data.data),
   plans:()=>apiClient.get('/era5/plans').then(r=>r.data.data),
   jobs:()=>apiClient.get('/era5/jobs').then(r=>r.data.data),
@@ -14,6 +15,8 @@ export const era5Api={
   retryJob:(id:string)=>apiClient.post(`/era5/jobs/${id}/retry`).then(r=>r.data.data),
   files:()=>apiClient.get('/era5/files').then(r=>r.data.data),
   statistics:()=>apiClient.get('/era5/samples/statistics').then(r=>r.data.data),
+  audit:()=>apiClient.get('/era5/samples/audit').then(r=>r.data.data),
+  freeze:()=>apiClient.post('/era5/samples/freeze').then(r=>r.data.data),
   build:(limit?:number)=>apiClient.post('/era5/samples/build',null,{params:{limit}}).then(r=>r.data.data),
   importFile:(file:File)=>{const form=new FormData();form.append('file',file);return apiClient.post('/era5/import',form,{timeout:120000}).then(r=>r.data.data)},
 }

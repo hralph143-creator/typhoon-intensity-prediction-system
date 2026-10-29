@@ -26,6 +26,7 @@ from backend.app.models.typhoon import TyphoonEvent
 from backend.app.services.ml_metrics import evaluation_details
 from backend.app.services.safnet_dataset import Normalization,SAFNetDataset,availability,fit_normalization,rows_for_split
 from backend.app.services.safnet_model import SAFNet,SAFNetConfig,parameter_report
+from backend.app.services.phase8_service import freeze_dataset
 
 ACTIVE={"queued","preparing","training","evaluating"}
 DEFAULTS={"epochs":50,"batch_size":16,"learning_rate":.001,"patience":8,"gradient_clip":1.0,"seed":42,"cnn_channels":[32,64],"time_embedding":96,"attention_heads":8,"attention_layers":1,"fusion_hidden":128,"dropout":.1,"time_features":1}
@@ -100,7 +101,7 @@ def _run(experiment_id,signal):
         datasets={key:SAFNetDataset(rows,normalization) for key,rows in groups.items()};generator=torch.Generator().manual_seed(int(values["seed"]))
         loaders={key:DataLoader(ds,batch_size=int(values["batch_size"]),shuffle=key=="train",generator=generator if key=="train" else None) for key,ds in datasets.items()}
         model=SAFNet(config).to(device);optimizer=torch.optim.Adam(model.parameters(),lr=float(values["learning_rate"]));loss_fn=nn.MSELoss();best=float("inf");best_state=None;remaining=int(values["patience"]);curve=[]
-        artifact_dir.mkdir(parents=True,exist_ok=False);state=availability();version="era5-spatiotemporal-v1";stats={key:{"sample_count":len(rows),"event_count":len({r.sid for r in rows})} for key,rows in groups.items()};stats["experiment_level"]=state["experiment_level"];stats["limitations"]=state["limitations"]
+        artifact_dir.mkdir(parents=True,exist_ok=False);state=availability();processing_version=groups["train"][0].processing_version;manifest=freeze_dataset(processing_version);version=manifest["dataset_version"];stats={key:{"sample_count":len(rows),"event_count":len({r.sid for r in rows})} for key,rows in groups.items()};stats["experiment_level"]=state["experiment_level"];stats["limitations"]=state["limitations"];stats["manifest_sha256"]=manifest["manifest_sha256"]
         _save(experiment_id,status="training",phase="training",progress=5,artifact_dir=str(artifact_dir),dataset_version=version,split_statistics=stats,device=str(device))
         for epoch in range(1,int(values["epochs"])+1):
             _check(signal);model.train();total=0.0
