@@ -103,6 +103,8 @@ class Era5SampleBatch(Base):
     cursor: Mapped[int] = mapped_column(Integer, default=0)
     duration_seconds: Mapped[float | None] = mapped_column(Float)
     processing_version: Mapped[str] = mapped_column(String(32), default="spatiotemporal-v2")
+    source_id: Mapped[str | None] = mapped_column(String(32))
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     plan: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     errors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)

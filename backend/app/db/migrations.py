@@ -18,6 +18,7 @@ def migrate(engine: Engine) -> None:
         (5, "research_reports_and_backups", (AnalysisReport.__table__, SystemBackup.__table__)),
         (6, "phase_seven_fusion_and_batches", (CrossSourceEventMatch.__table__, Era5SampleBatch.__table__)),
         (7, "phase_eight_scale_batch_metadata", (Era5SampleBatch.__table__,)),
+        (8, "phase_eight_source_adapter_metadata", (Era5SampleBatch.__table__,)),
     )
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"))
@@ -47,6 +48,8 @@ def migrate(engine: Engine) -> None:
             "cursor": "INTEGER NOT NULL DEFAULT 0",
             "duration_seconds": "FLOAT",
             "processing_version": "VARCHAR(32) NOT NULL DEFAULT 'spatiotemporal-v2'",
+            "source_id": "VARCHAR(32)",
+            "metrics": "JSON NOT NULL DEFAULT '{}'",
         }
         for column, definition in additions.items():
             if column not in batch_columns:

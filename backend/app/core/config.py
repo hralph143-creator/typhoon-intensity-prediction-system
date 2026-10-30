@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     era5_batch_timeout_seconds: int = 1800
     era5_cache_budget_gb: float = 5.0
     era5_min_free_memory_gb: float = 1.5
+    era5_network_timeout_seconds: int = 30
+    era5_sample_timeout_seconds: int = 180
 
     @property
     def raw_data_dir(self) -> Path:

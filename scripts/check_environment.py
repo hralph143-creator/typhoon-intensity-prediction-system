@@ -72,7 +72,7 @@ def main() -> int:
         ("Python 3.11/3.12", (3, 11) <= sys.version_info[:2] <= (3, 12), sys.version.split()[0]),
         ("Python 运行环境", True, f"虚拟环境 {sys.prefix}" if sys.prefix != sys.base_prefix else f"系统解释器回退 {sys.executable}"),
     ]
-    for name in ("fastapi", "uvicorn", "sqlalchemy", "pydantic", "pydantic_settings", "httpx", "multipart", "numpy", "sklearn", "joblib", "openpyxl", "torch", "xarray", "netCDF4", "h5netcdf", "h5py", "zarr", "gcsfs", "reportlab", "matplotlib", "pypdf", "pdfplumber"):
+    for name in ("fastapi", "uvicorn", "sqlalchemy", "pydantic", "pydantic_settings", "httpx", "multipart", "numpy", "sklearn", "joblib", "openpyxl", "torch", "xarray", "netCDF4", "h5netcdf", "h5py", "zarr", "gcsfs", "icechunk", "pcodec", "reportlab", "matplotlib", "pypdf", "pdfplumber"):
         installed = importlib.util.find_spec(name) is not None
         checks.append((f"Python 依赖 {name}", installed, "已安装" if installed else "未安装"))
     cdsapi_installed = importlib.util.find_spec("cdsapi") is not None

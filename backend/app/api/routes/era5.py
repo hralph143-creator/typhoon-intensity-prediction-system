@@ -5,10 +5,11 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from backend.app.core.config import settings
-from backend.app.services.era5_service import (build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
+from backend.app.services.era5_service import (benchmark_source, build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
     cancel_public_batch, create_public_batch, credential_status, download_public_sample, get_public_batch, list_files,
     list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, resume_public_batch, retry_job, sample_statistics)
 from backend.app.services.phase8_service import data_quality_audit, freeze_dataset
+from backend.app.services.era5_sources import load_source_state, probe_source, set_default_source, source_descriptors
 
 router = APIRouter(prefix="/era5", tags=["ERA5 风场"])
 
@@ -22,6 +23,10 @@ class DownloadRequest(BaseModel):
     sid: str | None = Field(default=None,max_length=32)
 
 
+class DefaultSourceRequest(BaseModel):
+    source_id: str = Field(pattern="^(auto|aws_icechunk|google_arco|ecmwf_arco)$")
+
+
 @router.get("/status")
 def status():
     files = list_files()
@@ -30,6 +35,28 @@ def status():
         credentials["message"] = "公共 ARCO-ERA5 已连接；CDS 个人令牌仅用于官方 API 扩展下载。"
     return ok({**credentials, "connected": bool(files), "access_mode": "public_arco" if files else None,
         "public_arco_available": True, "disk_budget_gb": settings.era5_disk_budget_gb, "files": len(files)})
+
+
+@router.get("/sources")
+def sources():return ok({"items":source_descriptors(),"state":load_source_state()})
+
+
+@router.post("/sources/{source_id}/check")
+def check_source(source_id:str):
+    try:return ok(probe_source(source_id),"数据源检查完成")
+    except ValueError as exc:raise HTTPException(422,str(exc))
+
+
+@router.post("/sources/{source_id}/benchmark")
+def run_source_benchmark(source_id:str):
+    try:return ok(benchmark_source(source_id),"固定工作负载基准完成")
+    except ValueError as exc:raise HTTPException(409,str(exc))
+
+
+@router.put("/sources/default")
+def default_source(payload:DefaultSourceRequest):
+    try:return ok(set_default_source(payload.source_id),"默认数据源已更新")
+    except ValueError as exc:raise HTTPException(409,str(exc))
 
 
 @router.post("/public-sample")
