@@ -1,8 +1,8 @@
 # 云浪智析——基于时空注意力的台风强度预测系统
 
-这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.6.0，第六阶段：科研分析报告、结果导出与系统综合完善**。
+这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.8.0，第八阶段：ERA5 多事件规模化扩容与 SAF-Net 正式训练验收**。
 
-已接入 NOAA 官方 IBTrACS、中国气象局 CMA 独立最佳路径和 ECMWF/Copernicus ERA5 真实风场，并实际训练 Persistence、Ridge、LSTM 和 GRU。第六阶段新增真实数据快照驱动的三类 HTML/PDF 科研报告、统一 XLSX/CSV/PNG 导出、严格公平比较、预测记录查询、日志、SQLite 一致性备份恢复和受控维护。当前已有首个真实 ERA5 四时次样本，但训练、验证、测试三组尚未同时齐备，因此没有 SAF-Net 正式权重或虚构指标。
+已接入 NOAA 官方 IBTrACS、中国气象局 CMA 独立最佳路径和 ECMWF/Copernicus ERA5 真实风场，并实际训练 Persistence、Ridge、LSTM、GRU 和 SAF-Net。最终 ERA5 冻结集包含 90 个四时次样本、32 个独立事件，训练/验证/测试为 50/20/20 条；SAF-Net 已完成三个随机种子的真实训练，并严格按验证集选择最终权重。当前正式结果没有显示 SAF-Net 优于时序基线，系统和报告会如实展示该结论。
 
 ## 技术架构
 
@@ -78,7 +78,7 @@ API 与 CLI 共用处理逻辑和跨进程任务锁。CSV 分块接收、逐行�
 
 SAF-Net 对四个时次分别使用共享二维 CNN 和 CBAM 风格空间注意力，时间分支将每时次 CMA 历史风速映射至 96 维，再用 8 头自注意力编码四时次关系；两个分支经显式维度校验后融合并回归 `t+6h` 风速。默认模型共有 134,468 个可训练参数。
 
-训练标准化参数只拟合训练集。模型保存 `state_dict`、配置、输入定义、标准化参数、数据版本和 SHA-256；加载使用 `weights_only=True` 并校验文件。当前无真实时空样本时，后端拒绝创建正式实验，前端禁用训练和预测。详见 [SAF-Net 结构](docs/safnet-architecture.md)、[训练与模型管理](docs/safnet-training.md)、[算法烟雾测试](docs/safnet-algorithm-tests.md)和[第五阶段验收](docs/phase-5-acceptance.md)。
+训练标准化参数只拟合训练集。模型保存 `state_dict`、配置、输入定义、标准化参数、数据版本、最佳 Epoch 和 SHA-256；加载使用 `weights_only=True` 并校验文件。最终 seed 42 的验证 MAE 为 1.0043 m/s，统一测试 MAE 为 4.0427 m/s，弱于 Persistence 的 1.9034 m/s。详见 [SAF-Net 结构](docs/safnet-architecture.md)、[训练与模型管理](docs/safnet-training.md)和[第八阶段最终验收](docs/phase-8-final-acceptance.md)。
 
 ## 自动化测试
 
@@ -129,6 +129,7 @@ docs/          项目文档
 - `GET /api/era5/plans`、`POST/GET /api/era5/jobs`：小范围计划和可恢复下载任务
 - `POST /api/era5/import`、`GET /api/era5/files`：NetCDF 质检、归档和追溯
 - `POST /api/era5/samples/build`、`GET /api/era5/samples/statistics`：构建和统计四时次样本
+- `GET/POST /api/era5/scale-batches/preview`、`/scale-batches`：按正式目标规划和启动受控规模化批次
 - `POST/GET /api/reports`：创建、轮询、预览和下载三类科研报告
 - `GET /api/exports/workbook`、`/{kind}.csv`、`/model-comparison.png`：科研成果导出
 - `GET /api/ml/comparison/detail`、`/predictions`：严格模型比较与预测记录筛选
@@ -141,6 +142,8 @@ docs/          项目文档
 第七阶段已完成跨源事件匹配、受控真实 ERA5 小样本扩充、三随机种子 SAF-Net 训练及五模型共同测试集程序。当前事件覆盖不足，结果明确标记为小样本试验，详见 [第七阶段实际验收报告](docs/phase-7-acceptance.md)。
 
 第八阶段新增版本化数据质量门禁、SHA-256 冻结清单、ARCO 远程读取预算、独立事件优先选样、批次断点恢复及事件簇 Bootstrap。ARCO 分析就绪存储按单时次全局空间块组织，小范围切片仍可能产生显著读取放大，因此默认每组仅 1 条、单并发且单批保守远程预算 4 GiB；未达到 50/20/20 时系统继续标记为工程性小样本试验。详见 [第八阶段验收报告](docs/phase-8-acceptance.md)。
+
+最终补充开发已把真实样本扩充至训练 50 条/20 事件、验证 20 条/6 事件、测试 20 条/6 事件，并完成三种子正式训练、验证集选模、五模型共同测试、事件级 Bootstrap、注意力输出和 HTML/PDF 报告。详见 [第八阶段最终科研实验验收](docs/phase-8-final-acceptance.md)。
 
 - [数据来源与署名](docs/data-sources.md)
 - [字段与清洗规则](docs/data-fields.md)
@@ -169,7 +172,8 @@ docs/          项目文档
 - [软件功能总览](docs/software-features.md)
 - [第六阶段验收报告](docs/phase-6-acceptance.md)
 - [第八阶段验收报告](docs/phase-8-acceptance.md)
+- [第八阶段最终科研实验验收](docs/phase-8-final-acceptance.md)
 
 当前同时保存 NOAA IBTrACS 中的 CMA 字段和独立 CMA TXT 数据源，查询时可切换来源。ERA5 已通过公共 ARCO 镜像接入，CDS 个人授权仅作为扩展下载方式。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 
-原始文件、数据库、任务锁、模型权重、生成报告、备份、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。第六阶段完成后不自动进入第七阶段。
+原始文件、数据库、任务锁、模型权重、生成报告、备份、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。本次工作止于第八阶段最终验收，不自动进入下一阶段。

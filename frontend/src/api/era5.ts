@@ -8,6 +8,8 @@ export const era5Api={
   publicSample:()=>apiClient.post('/era5/public-sample',null,{timeout:180000}).then(r=>r.data.data),
   batchPreview:(per_split=2)=>apiClient.get('/era5/public-batches/preview',{params:{per_split},timeout:30000}).then(r=>r.data.data),
   createBatch:(per_split=2)=>apiClient.post('/era5/public-batches',null,{params:{per_split}}).then(r=>r.data.data),
+  scalePreview:(max_samples=12)=>apiClient.get('/era5/scale-batches/preview',{params:{max_samples},timeout:30000}).then(r=>r.data.data),
+  createScaleBatch:(max_samples=12)=>apiClient.post('/era5/scale-batches',null,{params:{max_samples}}).then(r=>r.data.data),
   batches:()=>apiClient.get('/era5/public-batches').then(r=>r.data.data),
   cancelBatch:(id:string)=>apiClient.post(`/era5/public-batches/${id}/cancel`).then(r=>r.data.data),
   resumeBatch:(id:string)=>apiClient.post(`/era5/public-batches/${id}/resume`).then(r=>r.data.data),

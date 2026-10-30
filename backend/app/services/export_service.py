@@ -12,9 +12,11 @@ from sqlalchemy import select
 
 from backend.app.db.database import SessionLocal
 from backend.app.models.ml import ModelArtifact,PredictionRecord,TrainingExperiment
+from backend.app.models.era5 import SpatiotemporalSample
 from backend.app.models.typhoon import TyphoonEvent,TyphoonObservation
 from backend.app.services.analysis_service import comparison_analysis,predictions
 from backend.app.services.report_charts import bar_chart
+from backend.app.services.fair_comparison import compare_common_test_set
 
 
 def safe_cell(value):
@@ -41,6 +43,7 @@ def comprehensive_workbook()->io.BytesIO:
         events=list(db.scalars(select(TyphoonEvent).order_by(TyphoonEvent.season,TyphoonEvent.sid)));_sheet(book,"历史台风",["SID","名称","季节","首次观测 UTC","末次观测 UTC","观测数","CMA最大风速(m/s)","最低气压(hPa)"],[[x.sid,x.name,x.season,x.first_observation,x.last_observation,x.observation_count,x.maximum_wind,x.minimum_pressure] for x in events])
         observations=db.execute(select(TyphoonObservation,TyphoonEvent.sid).join(TyphoonEvent).order_by(TyphoonObservation.id));_sheet(book,"历史观测",["SID","观测时间 UTC","纬度","经度","轨迹类型","CMA风速(m/s)","CMA气压(hPa)","CMA IFLAG"],[[sid,x.observation_time,x.latitude,x.longitude,x.track_type,x.cma_wind_ms,x.cma_pressure,x.cma_iflag] for x,sid in observations])
         experiments=list(db.scalars(select(TrainingExperiment).order_by(TrainingExperiment.created_at)));_sheet(book,"模型实验",["实验ID","名称","模型","状态","数据版本","创建时间 UTC","完成时间 UTC"],[[x.id,x.name,x.model_type,x.status,x.dataset_version,x.created_at,x.finished_at] for x in experiments])
+        era5=list(db.scalars(select(SpatiotemporalSample).where(SpatiotemporalSample.processing_version=="spatiotemporal-v2").order_by(SpatiotemporalSample.split,SpatiotemporalSample.forecast_time)));_sheet(book,"ERA5时空样本",["样本ID","SID","分组","起报时间 UTC","目标时间 UTC","目标风速(m/s)","形状","处理版本"],[[x.id,x.sid,x.split,x.forecast_time,x.target_time,x.target_wind,str(x.shape),x.processing_version] for x in era5])
         metrics=[]
         for x in experiments:
             for split,detail in (x.metrics or {}).items():
@@ -49,6 +52,7 @@ def comprehensive_workbook()->io.BytesIO:
         _sheet(book,"评价指标",["实验ID","模型","分组","样本数","MAE(m/s)","RMSE(m/s)","Bias(m/s)"],metrics)
         records=db.execute(select(PredictionRecord,ModelArtifact.name).join(ModelArtifact));_sheet(book,"预测结果",["记录ID","模型","SID","起报时间 UTC","目标时间 UTC","预测风速(m/s)","真实风速(m/s)","误差(m/s)"],[[x.id,name,x.sid,x.forecast_time,x.target_time,x.predicted_wind,x.actual_wind,x.error] for x,name in records])
         _sheet(book,"综合统计",["项目","数值"],[["历史台风事件",len(events)],["历史观测",db.query(TyphoonObservation).count()],["正式成功实验",sum(x.status=="succeeded" for x in experiments)],["SAF-Net正式实验",sum(x.status=="succeeded" and x.model_type=="safnet" for x in experiments)]])
+    common=compare_common_test_set();_sheet(book,"五模型共同测试",["模型","模型ID","样本数","MAE(m/s)","RMSE(m/s)","Bias(m/s)","相对持续性改善%"],[[x["model_type"],x["model_id"],x["sample_count"],x["mae"],x["rmse"],x["bias"],x["improvement_pct"]] for x in common["items"]])
     output=io.BytesIO();book.save(output);output.seek(0);return output
 
 

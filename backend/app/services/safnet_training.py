@@ -100,7 +100,7 @@ def _run(experiment_id,signal):
         normalization=fit_normalization(groups["train"]);config=model_config(values);device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         datasets={key:SAFNetDataset(rows,normalization) for key,rows in groups.items()};generator=torch.Generator().manual_seed(int(values["seed"]))
         loaders={key:DataLoader(ds,batch_size=int(values["batch_size"]),shuffle=key=="train",generator=generator if key=="train" else None) for key,ds in datasets.items()}
-        model=SAFNet(config).to(device);optimizer=torch.optim.Adam(model.parameters(),lr=float(values["learning_rate"]));loss_fn=nn.MSELoss();best=float("inf");best_state=None;remaining=int(values["patience"]);curve=[]
+        model=SAFNet(config).to(device);optimizer=torch.optim.Adam(model.parameters(),lr=float(values["learning_rate"]));loss_fn=nn.MSELoss();best=float("inf");best_epoch=None;best_state=None;remaining=int(values["patience"]);curve=[]
         artifact_dir.mkdir(parents=True,exist_ok=False);state=availability();processing_version=groups["train"][0].processing_version;manifest=freeze_dataset(processing_version);version=manifest["dataset_version"];stats={key:{"sample_count":len(rows),"event_count":len({r.sid for r in rows})} for key,rows in groups.items()};stats["experiment_level"]=state["experiment_level"];stats["limitations"]=state["limitations"];stats["manifest_sha256"]=manifest["manifest_sha256"]
         _save(experiment_id,status="training",phase="training",progress=5,artifact_dir=str(artifact_dir),dataset_version=version,split_statistics=stats,device=str(device))
         for epoch in range(1,int(values["epochs"])+1):
@@ -113,7 +113,7 @@ def _run(experiment_id,signal):
                     prediction=model(batch["wind"].to(device),batch["temporal"].to(device)).squeeze(-1);validation_total+=loss_fn(prediction,batch["target"].to(device)).item()*len(prediction)
             train_loss=total/len(datasets["train"]);validation_loss=validation_total/len(datasets["validation"]);curve.append({"epoch":epoch,"train_loss":train_loss,"validation_loss":validation_loss})
             _save(experiment_id,current_epoch=epoch,progress=round(epoch/int(values["epochs"])*82+5,2),training_curve=curve)
-            if validation_loss<best-1e-7:best=validation_loss;best_state={k:v.detach().cpu().clone() for k,v in model.state_dict().items()};remaining=int(values["patience"])
+            if validation_loss<best-1e-7:best=validation_loss;best_epoch=epoch;best_state={k:v.detach().cpu().clone() for k,v in model.state_dict().items()};remaining=int(values["patience"])
             else:
                 remaining-=1
                 if remaining<=0:break
@@ -125,7 +125,7 @@ def _run(experiment_id,signal):
             predicted=_predict(model,evaluation_loader,device,normalization);samples=[SimpleNamespace(sid=r.sid,season=r.forecast_time.year,forecast_time=r.forecast_time,target_time=r.target_time,target=r.target_wind,winds=(0,0,0,r.temporal_features[3])) for r in rows]
             metrics[split]=evaluation_details(samples,predicted)
         checkpoint={"state_dict":best_state,"config":config.serializable(),"normalization":normalization.serializable(),"format_version":1};model_path=artifact_dir/"safnet.pt";torch.save(checkpoint,model_path)
-        checksum=hashlib.sha256(model_path.read_bytes()).hexdigest();metadata={"experiment_id":experiment_id,"model_type":"safnet","dataset_version":version,"experiment_level":state["experiment_level"],"limitations":state["limitations"],"config":config.serializable(),"normalization":normalization.serializable(),"parameters":parameter_report(model),"sha256":checksum,"training_seconds":time.perf_counter()-started,"python_version":__import__('sys').version,"pytorch_version":torch.__version__,"device":str(device),"seed":int(values["seed"]),"created_at":datetime.now(UTC).isoformat()}
+        checksum=hashlib.sha256(model_path.read_bytes()).hexdigest();metadata={"experiment_id":experiment_id,"model_type":"safnet","dataset_version":version,"experiment_level":state["experiment_level"],"limitations":state["limitations"],"config":config.serializable(),"normalization":normalization.serializable(),"parameters":parameter_report(model),"sha256":checksum,"best_epoch":best_epoch,"best_validation_loss":best,"training_seconds":time.perf_counter()-started,"python_version":__import__('sys').version,"pytorch_version":torch.__version__,"device":str(device),"seed":int(values["seed"]),"created_at":datetime.now(UTC).isoformat()}
         metadata_path=artifact_dir/"metadata.json";metadata_path.write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding="utf-8")
         model_id=str(uuid4())
         with SessionLocal() as db:

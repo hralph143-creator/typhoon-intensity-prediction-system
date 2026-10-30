@@ -71,9 +71,11 @@ def data_quality_audit(processing_version: str = "spatiotemporal-v2") -> dict:
             conflicts[f"{left}_{right}"] = overlap
             if overlap: problems["cross_split_sid"] += len(overlap)
     split_stats = {name: {"samples": sum(x["split"] == name for x in entries), "events": len(split_sids[name])} for name in names}
-    engineering_ready = all(split_stats[name]["samples"] >= target for name, target in {"train":50,"validation":20,"test":20}.items())
+    sample_targets={"train":50,"validation":20,"test":20};event_targets={"train":20,"validation":5,"test":5}
+    engineering_ready = all(split_stats[name]["samples"] >= sample_targets[name] and split_stats[name]["events"] >= event_targets[name] for name in names)
     passed = bool(entries) and not problems
-    return {"processing_version":processing_version,"passed":passed,"formal_training_allowed":passed and engineering_ready,"engineering_target_met":engineering_ready,"era5_files":file_count,"wind_fields":field_count,"samples":len(entries),"events":len(set().union(*split_sids.values())),"splits":split_stats,"years":dict(sorted(years.items())),"intensity_bands":dict(intensities),"problems":dict(problems),"sid_conflicts":conflicts,"entries":entries}
+    remaining={name:{"samples":max(0,sample_targets[name]-split_stats[name]["samples"]),"events":max(0,event_targets[name]-split_stats[name]["events"])} for name in names}
+    return {"processing_version":processing_version,"passed":passed,"formal_training_allowed":passed and engineering_ready,"engineering_target_met":engineering_ready,"targets":{"samples":sample_targets,"events":event_targets},"remaining":remaining,"era5_files":file_count,"wind_fields":field_count,"samples":len(entries),"events":len(set().union(*split_sids.values())),"splits":split_stats,"years":dict(sorted(years.items())),"intensity_bands":dict(intensities),"problems":dict(problems),"sid_conflicts":conflicts,"entries":entries}
 
 
 def freeze_dataset(processing_version: str = "spatiotemporal-v2") -> dict:
@@ -83,7 +85,8 @@ def freeze_dataset(processing_version: str = "spatiotemporal-v2") -> dict:
     payload = {key:value for key,value in audit.items() if key != "entries"}
     payload["entries"] = audit["entries"]
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    version = "era5-phase8-" + hashlib.sha256(canonical).hexdigest()[:16]
+    prefix="era5-phase8-final-" if audit["formal_training_allowed"] else "era5-phase8-"
+    version = prefix + hashlib.sha256(canonical).hexdigest()[:16]
     payload["dataset_version"] = version
     payload["selection_frozen"] = True
     directory = settings.experiment_dir / "datasets"

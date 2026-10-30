@@ -281,6 +281,44 @@ def _public_plan(per_split: int = 2) -> list[dict]:
     return selected
 
 
+SCALE_SAMPLE_TARGETS={"train":50,"validation":20,"test":20}
+SCALE_EVENT_TARGETS={"train":20,"validation":5,"test":5}
+
+
+def _plan_item(sample,rule:str)->dict:
+    moments=[sample.forecast_time-timedelta(hours=h) for h in OFFSETS]
+    return {"sid":sample.sid,"typhoon_id":sample.typhoon_id,"split":sample.split,"forecast_time":_iso(sample.forecast_time),"target_time":_iso(sample.target_time),"moments":[_iso(x) for x in moments],"estimated_bytes":100_000,"estimated_remote_bytes":len(moments)*2*ARCO_CHUNK_ESTIMATE_BYTES,"selection_rule":rule}
+
+
+def _scale_plan(max_samples:int=12,targets:dict[str,int]|None=None)->list[dict]:
+    """Deterministic frozen plan: satisfy event diversity, then adjacent windows."""
+    targets={**SCALE_SAMPLE_TARGETS,**(targets or {})};samples=build_samples("strict");rows=_spatiotemporal_rows()
+    existing={(row.sid,row.forecast_time) for row in rows};by_split={name:[row for row in rows if row.split==name and row.processing_version==PROCESSING_VERSION] for name in SCALE_SAMPLE_TARGETS}
+    candidates={name:[x for x in samples if x.split==name and (x.sid,x.forecast_time) not in existing] for name in SCALE_SAMPLE_TARGETS}
+    plan=[];chosen=set()
+    while len(plan)<max_samples:
+        deficits={name:max(0,targets[name]-(len(by_split[name])+sum(x["split"]==name for x in plan))) for name in targets}
+        active=[name for name in ("train","validation","test") if deficits.get(name,0)>0 and candidates.get(name)]
+        if not active:break
+        split=max(active,key=lambda name:(deficits[name]/max(1,targets[name]),deficits[name],-list(SCALE_SAMPLE_TARGETS).index(name)))
+        current_sids={row.sid for row in by_split[split]}|{x["sid"] for x in plan if x["split"]==split}
+        need_events=max(0,SCALE_EVENT_TARGETS[split]-len(current_sids))
+        pool=[x for x in candidates[split] if (x.sid,x.forecast_time) not in chosen and (not need_events or x.sid not in current_sids)]
+        rule="event_target_then_adjacent_window"
+        if not pool:pool=[x for x in candidates[split] if (x.sid,x.forecast_time) not in chosen]
+        if not pool:break
+        reference={}
+        for row in by_split[split]:reference.setdefault(row.sid,[]).append(row.forecast_time)
+        for item in plan:
+            if item["split"]==split:reference.setdefault(item["sid"],[]).append(datetime.fromisoformat(item["forecast_time"].replace("Z","+00:00")).replace(tzinfo=None))
+        def rank(sample):
+            times=reference.get(sample.sid,[]);distance=min((abs((sample.forecast_time-x).total_seconds()) for x in times),default=float("inf"))
+            event_priority=(sample.sid in current_sids) if need_events else (sample.sid not in current_sids)
+            return (event_priority,distance,sample.forecast_time,sample.sid)
+        picked=min(pool,key=rank);chosen.add((picked.sid,picked.forecast_time));plan.append(_plan_item(picked,rule))
+    return plan
+
+
 def _spatiotemporal_rows():
     with SessionLocal() as db:return list(db.scalars(select(SpatiotemporalSample)))
 
@@ -293,6 +331,18 @@ def public_batch_preview(per_split:int=2)->dict:
             estimate=ADAPTERS[source_id].estimate(_sample_remote_request(sample));item["source_id"]=source_id;item["source_estimate"]=estimate;item["estimated_remote_bytes"]=int(estimate.get("estimated_uncompressed_bytes") or 0);remote+=item["estimated_remote_bytes"]
     free=shutil.disk_usage(settings.era5_raw_dir.parent if settings.era5_raw_dir.parent.exists() else settings.era5_raw_dir.parents[1]).free
     return {"plan":plan,"samples":len(plan),"source_id":source_id,"estimated_bytes":estimated,"estimated_remote_bytes":remote,"disk_free_bytes":free,"disk_budget_bytes":int(settings.era5_disk_budget_gb*1024**3),"remote_budget_bytes":int(settings.era5_remote_batch_budget_gb*1024**3),"max_concurrency":settings.era5_max_workers,"access":ADAPTERS[source_id].name,"warning":"远程量是按分块元数据计算的未压缩估算，不是实测流量。"}
+
+
+def scale_batch_preview(max_samples:int=12,targets:dict[str,int]|None=None)->dict:
+    if max_samples<1 or max_samples>settings.era5_batch_max_samples:raise ValueError("批次样本数超出受控范围")
+    plan=_scale_plan(max_samples,targets);source_id=choose_source({});estimated=sum(x["estimated_bytes"] for x in plan);remote=0;sample_map={(x.sid,_iso(x.forecast_time)):x for x in build_samples("strict")}
+    for item in plan:
+        sample=sample_map.get((item["sid"],item["forecast_time"]))
+        if sample:
+            request=_missing_sample_remote_request(sample);estimate=ADAPTERS[source_id].estimate(request) if request else {"estimated_chunks":0,"estimated_uncompressed_bytes":0,"actual_transfer_bytes":0,"basis":"existing local coverage"}
+            item["source_id"]=source_id;item["source_estimate"]=estimate;item["estimated_remote_bytes"]=int(estimate.get("estimated_uncompressed_bytes") or 0);item["cached_time_count"]=4-len((request or {}).get("times",[]));remote+=item["estimated_remote_bytes"]
+    free=shutil.disk_usage(settings.era5_raw_dir.parent if settings.era5_raw_dir.parent.exists() else settings.era5_raw_dir.parents[1]).free
+    return {"plan":plan,"samples":len(plan),"targets":{**SCALE_SAMPLE_TARGETS,**(targets or {})},"source_id":source_id,"estimated_bytes":estimated,"estimated_remote_bytes":remote,"disk_free_bytes":free,"disk_budget_bytes":int(settings.era5_disk_budget_gb*1024**3),"remote_budget_bytes":int(settings.era5_remote_batch_budget_gb*1024**3),"selection_seed":2028,"selection_rule":"event_target_then_adjacent_window","warning":"分块量为元数据估算；实际传输量不可测时保持未测得。"}
 
 
 def _sample_by_key(sid:str,forecast_time:str):
@@ -333,6 +383,17 @@ def _sample_remote_request(sample)->dict:
     return {"sid":sample.sid,"times":[_iso(x) for x in moments],"centers":[list(x) for x in centers],"area":[float(north),float(west),float(south),float(east)],"network_timeout_seconds":settings.era5_network_timeout_seconds}
 
 
+def _missing_sample_remote_request(sample)->dict|None:
+    request=_sample_remote_request(sample);moments=[datetime.fromisoformat(x.replace("Z","+00:00")).replace(tzinfo=None) for x in request["times"]]
+    with SessionLocal() as db:files=list(db.scalars(select(Era5File).where(Era5File.status=="valid")))
+    missing=[index for index,(moment,center) in enumerate(zip(moments,request["centers"])) if not _find_covering_file(files,moment,*center)]
+    if not missing:return None
+    request["times"]=[request["times"][index] for index in missing];request["centers"]=[request["centers"][index] for index in missing]
+    north=np.ceil((max(x[0] for x in request["centers"])+4)*4)/4;south=np.floor((min(x[0] for x in request["centers"])-4)*4)/4
+    west=np.floor((min(x[1] for x in request["centers"])-4)*4)/4;east=np.ceil((max(x[1] for x in request["centers"])+4)*4)/4;request["area"]=[float(north),float(west),float(south),float(east)]
+    return request
+
+
 def _adapter_cache_key(request:dict)->dict:
     value={key:request.get(key) for key in ("source_id","dataset_version","sid","times","centers","area","variables","processing_version","crop_version")}
     if value["source_id"] in {"google_arco","aws_icechunk"} and value["crop_version"] is None:value["crop_version"]=CROP_VERSION
@@ -347,7 +408,10 @@ def _find_adapter_cache(cache_key:dict):
 
 
 def _archive_via_adapter(sample,source_id:str,signal:threading.Event)->tuple[dict,dict]:
-    request=_sample_remote_request(sample);state=load_source_state()
+    request=_missing_sample_remote_request(sample)
+    if request is None:raise ValueError("local_coverage_complete")
+    reused_time_count=4-len(request["times"])
+    state=load_source_state()
     if source_id=="aws_icechunk":request["snapshot_id"]=((state.get("sources") or {}).get(source_id) or {}).get("snapshot_id")
     dataset_version=request.get("snapshot_id") if source_id=="aws_icechunk" else "google-arco-analysis-ready"
     archive_request={"source":"aws_earthmover_icechunk_era5" if source_id=="aws_icechunk" else "google_public_arco_era5","source_id":source_id,"upstream_producer":"ECMWF Copernicus Climate Change Service","dataset_version":dataset_version,"snapshot_id":dataset_version if source_id=="aws_icechunk" else None,"bucket":"earthmover-icechunk-era5" if source_id=="aws_icechunk" else None,"prefix":"icechunkV2" if source_id=="aws_icechunk" else None,"group":"single/temporal" if source_id=="aws_icechunk" else None,"sid":sample.sid,"times":request["times"],"centers":request["centers"],"area":request["area"],"variables":["u10","v10"],"processing_version":PROCESSING_VERSION,"crop_version":CROP_VERSION,"actual_transfer_bytes":None,"http_requests":None}
@@ -356,7 +420,7 @@ def _archive_via_adapter(sample,source_id:str,signal:threading.Event)->tuple[dic
     temporary=settings.era5_raw_dir/f"{source_id}-{sample.sid}-{sample.forecast_time:%Y%m%d%H}.worker.nc"
     try:
         metrics=run_read_worker(source_id,request,temporary,settings.era5_sample_timeout_seconds,signal.is_set)
-        archive_request["dataset_version"]=metrics["dataset_version"];archive_request["snapshot_id"]=metrics["dataset_version"] if source_id=="aws_icechunk" else None;archive_request["accessed_at"]=metrics["completed_at"];archive_request["request_fingerprint"]=_request_hash(_adapter_cache_key(archive_request));metrics["cache_hit"]=False
+        archive_request["dataset_version"]=metrics["dataset_version"];archive_request["snapshot_id"]=metrics["dataset_version"] if source_id=="aws_icechunk" else None;archive_request["accessed_at"]=metrics["completed_at"];archive_request["request_fingerprint"]=_request_hash(_adapter_cache_key(archive_request));metrics["cache_hit"]=False;metrics["reused_time_count"]=reused_time_count
         return register_file(temporary,temporary.name.replace(".worker",""),archive_request),metrics
     finally:
         temporary.unlink(missing_ok=True);temporary.with_suffix(".partial.nc").unlink(missing_ok=True)
@@ -376,6 +440,18 @@ def create_public_batch(per_split:int=2)->dict:
     return get_public_batch(batch_id)
 
 
+def create_scale_batch(max_samples:int=12,targets:dict[str,int]|None=None)->dict:
+    preview=scale_batch_preview(max_samples,targets)
+    if not preview["plan"]:raise ValueError("规模化目标已经达到或没有新的严格样本")
+    used=sum(p.stat().st_size for p in settings.era5_raw_dir.glob("*") if p.is_file()) if settings.era5_raw_dir.exists() else 0
+    if used+preview["estimated_bytes"]>preview["disk_budget_bytes"] or preview["disk_free_bytes"]<preview["estimated_bytes"]*2:raise ValueError("磁盘预算不足，未创建批次")
+    if preview["estimated_remote_bytes"]>preview["remote_budget_bytes"]:raise ValueError("远程读取估算超过单批预算")
+    batch_id=str(uuid4())
+    with SessionLocal() as db:
+        db.add(Era5SampleBatch(id=batch_id,status="queued",requested=len(preview["plan"]),estimated_bytes=preview["estimated_bytes"],estimated_remote_bytes=preview["estimated_remote_bytes"],processing_version=PROCESSING_VERSION,source_id=preview["source_id"],plan=preview["plan"],metrics={"selection":{"seed":preview["selection_seed"],"rule":preview["selection_rule"],"targets":preview["targets"]}}));db.commit()
+    signal=threading.Event();_batch_signals[batch_id]=signal;_executor.submit(_run_public_batch,batch_id,signal);return get_public_batch(batch_id)
+
+
 def _run_public_batch(batch_id:str,signal:threading.Event):
     errors=[];dataset=None;started=time.perf_counter();performance=[]
     try:
@@ -389,11 +465,15 @@ def _run_public_batch(batch_id:str,signal:threading.Event):
                 wanted=datetime.fromisoformat(item["forecast_time"].replace("Z","+00:00")).replace(tzinfo=None)
                 sample=candidates.get((item["sid"],wanted))
                 if not sample:raise ValueError("严格样本清单中不存在")
-                result,metrics=_archive_via_adapter(sample,source_id,signal);completed+=1;actual+=int(result["file_size"]);cache_hits+=int(bool(metrics.get("cache_hit")));performance.append({"sid":item["sid"],"forecast_time":item["forecast_time"],**metrics})
+                prebuild=build_spatiotemporal_samples(sample_keys={(sample.sid,sample.forecast_time)})
+                if prebuild["built"] or prebuild["reused"]:
+                    result={"file_size":0};metrics={"source_id":source_id,"dataset_version":"local-coverage","read_seconds":0.0,"actual_transfer_bytes":0,"http_requests":0,"local_bytes":0,"cache_hit":True,"completed_at":_iso(datetime.now(UTC))}
+                else:result,metrics=_archive_via_adapter(sample,source_id,signal)
+                completed+=1;actual+=int(result["file_size"]);cache_hits+=int(bool(metrics.get("cache_hit")));performance.append({"sid":item["sid"],"forecast_time":item["forecast_time"],**metrics})
             except InterruptedError:raise
             except Exception as exc:errors.append({"sid":item["sid"],"forecast_time":item["forecast_time"],"error":f"{type(exc).__name__}: {exc}"})
             with SessionLocal() as db:
-                row=db.get(Era5SampleBatch,batch_id);row.completed=completed;row.failed=len(errors);row.actual_bytes=actual;row.cache_hits=cache_hits;row.remote_requests=0;row.cursor=index+1;row.duration_seconds=time.perf_counter()-started;row.errors=errors;row.metrics={"items":performance,"actual_transfer_bytes":None,"http_requests":None};db.commit()
+                row=db.get(Era5SampleBatch,batch_id);selection=(row.metrics or {}).get("selection");row.completed=completed;row.failed=len(errors);row.actual_bytes=actual;row.cache_hits=cache_hits;row.remote_requests=0;row.cursor=index+1;row.duration_seconds=time.perf_counter()-started;row.errors=errors;row.metrics={"selection":selection,"items":performance,"reused_time_count":sum(x.get("reused_time_count",0) for x in performance),"actual_transfer_bytes":None,"http_requests":None};db.commit()
         keys={(x["sid"],datetime.fromisoformat(x["forecast_time"].replace("Z","+00:00")).replace(tzinfo=None)) for x in plan}
         built=build_spatiotemporal_samples(sample_keys=keys)
         with SessionLocal() as db:

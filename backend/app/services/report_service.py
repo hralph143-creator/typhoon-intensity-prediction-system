@@ -20,6 +20,7 @@ from backend.app.models.report import AnalysisReport
 from backend.app.models.typhoon import TyphoonEvent,TyphoonObservation
 from backend.app.services.report_charts import bar_chart,histogram,line_chart,track_chart
 from backend.app.services.report_render import render_html,render_pdf
+from backend.app.services.fair_comparison import compare_common_test_set
 
 REPORT_TYPES={"typhoon":"历史台风分析报告","model":"模型预测评估报告","comprehensive":"综合科研分析报告"}
 _executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix="report")
@@ -66,7 +67,7 @@ def _comprehensive_snapshot(db)->dict:
     phase8_splits={name:{"samples":sum(x.split==name for x in phase8),"events":len({x.sid for x in phase8 if x.split==name})} for name in ("train","validation","test")}
     safnet_runs=list(db.scalars(select(TrainingExperiment).where(TrainingExperiment.model_type=="safnet",TrainingExperiment.status=="succeeded")))
     formal=sum((x.split_statistics or {}).get("experiment_level")=="formal" for x in safnet_runs)
-    return {"kind":"comprehensive","source":"NOAA IBTrACS v04r01；中国气象局 CMA 独立最佳路径；ECMWF/Copernicus ERA5；第三阶段正式历史回测实验","statistics":{"event_count":event_count,"main_event_count":main_events,"observation_count":observation_count,"era5_file_count":db.scalar(select(func.count()).select_from(Era5File)) or 0,"spatiotemporal_sample_count":len(phase8),"phase8_splits":phase8_splits,"phase8_event_count":len({x.sid for x in phase8})},"experiments":experiments,"safnet":{"architecture_complete":True,"successful_experiment_count":len(safnet_runs),"formal_experiment_count":formal}}
+    return {"kind":"comprehensive","source":"NOAA IBTrACS v04r01；中国气象局 CMA 独立最佳路径；ECMWF/Copernicus ERA5；统一历史回测实验","statistics":{"event_count":event_count,"main_event_count":main_events,"observation_count":observation_count,"era5_file_count":db.scalar(select(func.count()).select_from(Era5File)) or 0,"spatiotemporal_sample_count":len(phase8),"phase8_splits":phase8_splits,"phase8_event_count":len({x.sid for x in phase8})},"experiments":experiments,"safnet":{"architecture_complete":True,"successful_experiment_count":len(safnet_runs),"formal_experiment_count":formal},"common_test":compare_common_test_set()}
 
 
 def snapshot(report_type:str,typhoon_id:int|None=None,experiment_id:str|None=None)->dict:
@@ -102,15 +103,15 @@ def _sections(data:dict,folder:Path)->list[dict]:
         level=(experiment.get("split_statistics") or {}).get("experiment_level","formal")
         limits=(experiment.get("split_statistics") or {}).get("limitations",[])
         return [{"title":"1　模型与实验信息","paragraphs":[f"实验 {experiment['name']}（{experiment['model_type'].upper()}），创建于 {experiment['created_at']}。",f"数据版本：{experiment['dataset_version']}；质量规则：{experiment['quality_profile']}；实验级别：{'正式' if level=='formal' else '小样本试验'}。"],"table":(["分组","样本数","事件数","年份"],split_rows),"table_caption":"训练、验证与测试分组"},{"title":"2　测试结果","paragraphs":[summary,"这些指标来自已保存模型权重和实验记录，没有重新训练或临时生成预测。"],"table":(["指标","数值"],[["MAE",overall.get("mae")],["RMSE",overall.get("rmse")],["Bias",overall.get("bias")],["测试样本",overall.get("sample_count")]]),"table_caption":"测试集评价指标","images":images},{"title":"3　配置与限制","paragraphs":["主要配置："+_json(experiment.get("config") or {}),*(limits or []),"这是历史再分析条件下的回测，不是实时业务预报。注意力权重不构成气象因果证明。"]}]
-    stats=data["statistics"];experiments=data["experiments"];labels=[x["model_type"].upper() for x in experiments];mae=[x["test"]["mae"] for x in experiments];rmse=[x["test"]["rmse"] for x in experiments];images=[]
-    if experiments:
+    stats=data["statistics"];experiments=data["experiments"];common=data.get("common_test",{});common_items=common.get("items",[]);labels=[x["model_type"].upper() for x in common_items];mae=[x["mae"] for x in common_items];rmse=[x["rmse"] for x in common_items];images=[]
+    if common_items:
         p=folder/"mae.png";images.append({"path":str(p),"data":bar_chart(p,labels,mae,"正式模型 MAE 对比","MAE (m/s)"),"caption":"相同测试集上的 MAE"});p=folder/"rmse.png";images.append({"path":str(p),"data":bar_chart(p,labels,rmse,"正式模型 RMSE 对比","RMSE (m/s)"),"caption":"相同测试集上的 RMSE"})
-    best=min(experiments,key=lambda x:x["test"]["mae"]) if experiments else None
     era5_count=stats["spatiotemporal_sample_count"]
     safnet_count=data.get("safnet",{}).get("successful_experiment_count",0)
-    era5_note=(f"SAF-Net 已使用 {era5_count} 个真实 ERA5 四时次样本完成 {safnet_count} 次训练。当前事件覆盖不足，结果标记为小样本试验，不进入第三阶段正式排名。" if safnet_count else (f"SAF-Net 网络结构已经实现，并已有 {era5_count} 个真实 ERA5 四时次样本验证链路；尚无训练权重。" if era5_count else "SAF-Net 当前没有真实 ERA5 样本或训练权重。"))
+    era5_note=(f"SAF-Net 已使用 {era5_count} 个真实 ERA5 四时次样本完成 {safnet_count} 次训练。最终权重仅按验证集 MAE 选择，测试集未参与选模。" if safnet_count else (f"SAF-Net 网络结构已经实现，并已有 {era5_count} 个真实 ERA5 四时次样本验证链路；尚无训练权重。" if era5_count else "SAF-Net 当前没有真实 ERA5 样本或训练权重。"))
     split=stats.get("phase8_splits",{})
-    return [{"title":"1　研究数据概述","paragraphs":[f"系统保存 {stats['event_count']} 个事件、{stats['observation_count']} 条观测，其中 {stats['main_event_count']} 个事件含 MAIN 轨迹。",f"实际 ERA5 文件 {stats['era5_file_count']} 个，第八阶段 v2 四时次样本 {era5_count} 个、独立事件 {stats.get('phase8_event_count',0)} 个。"],"table":(["分组","样本","独立事件"],[[name,value.get("samples",0),value.get("events",0)] for name,value in split.items()]),"table_caption":"第八阶段数据覆盖"},{"title":"2　正式模型性能比较","paragraphs":[f"当前可比较的正式实验共 {len(experiments)} 个，均为第三阶段同一严格质量测试口径。"+(f"其中最低 MAE 为 {best['model_type'].upper()}：{best['test']['mae']:.4f} m/s。" if best else "")],"table":(["模型","测试样本","MAE","RMSE","Bias","数据版本"],[[x["model_type"].upper(),x["test"]["sample_count"],f"{x['test']['mae']:.4f}",f"{x['test']['rmse']:.4f}",f"{x['test']['bias']:.4f}",x["dataset_version"]] for x in experiments]),"table_caption":"正式模型测试指标","images":images},{"title":"3　结果讨论与研究限制","paragraphs":["指标只适用于当前历史最佳路径回测数据和未来 6 小时预测时效，不构成业务预报能力证明。",era5_note,"不同机构风速平均时段没有在本报告中静默混用；缺失值未被虚构填补。"]},{"title":"4　总结","paragraphs":["现有真实结果表明四种第三阶段模型已完成统一测试集评价。环境场融合需要在三类数据分组齐备后再做正式验证。"]}]
+    bootstrap=common.get("bootstrap_safnet_minus_persistence",{});uncertainty=(f"事件级 Bootstrap 的 SAF-Net MAE−Persistence MAE 为 {bootstrap['estimate']:.4f} m/s，95% CI [{bootstrap['ci95'][0]:.4f}, {bootstrap['ci95'][1]:.4f}]。" if bootstrap.get("reliable") else bootstrap.get("reason","未计算事件级不确定性。"))
+    return [{"title":"1　研究数据概述","paragraphs":[f"系统保存 {stats['event_count']} 个事件、{stats['observation_count']} 条观测，其中 {stats['main_event_count']} 个事件含 MAIN 轨迹。",f"实际 ERA5 文件 {stats['era5_file_count']} 个，第八阶段 v2 四时次样本 {era5_count} 个、独立事件 {stats.get('phase8_event_count',0)} 个。"],"table":(["分组","样本","独立事件"],[[name,value.get("samples",0),value.get("events",0)] for name,value in split.items()]),"table_caption":"第八阶段数据覆盖"},{"title":"2　五模型共同测试集","paragraphs":[f"五类模型使用相同的 {common.get('sample_count',0)} 条测试样本、{common.get('event_count',0)} 个独立事件和 6 小时预测时效。",uncertainty],"table":(["模型","测试样本","MAE","RMSE","Bias","相对持续性改善%"],[[x["model_type"].upper(),x["sample_count"],f"{x['mae']:.4f}",f"{x['rmse']:.4f}",f"{x['bias']:.4f}","—" if x.get("improvement_pct") is None else f"{x['improvement_pct']:.2f}"] for x in common_items]),"table_caption":"统一测试口径指标","images":images},{"title":"3　结果讨论与研究限制","paragraphs":["指标只适用于当前历史最佳路径回测数据和未来 6 小时预测时效，不构成业务预报能力证明。",era5_note,"当前测试集虽覆盖 6 个独立事件，但窗口集中于少数事件，事件级泛化结论仍需更多年份与事件验证。","不同机构风速平均时段没有静默混用；缺失值未被虚构填补。"]},{"title":"4　总结","paragraphs":["真实数据扩容、三随机种子训练、验证集选模、统一测试和事件级不确定性估计均已完成。当前 SAF-Net 未优于 Persistence，应将其视为可复现实验结果而不是性能优势证明。"]}]
 
 
 def create_report(payload:dict)->dict:

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from backend.app.core.config import settings
 from backend.app.services.era5_service import (benchmark_source, build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
     cancel_public_batch, create_public_batch, credential_status, download_public_sample, get_public_batch, list_files,
-    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, resume_public_batch, retry_job, sample_statistics)
+    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, resume_public_batch, retry_job, sample_statistics, create_scale_batch, scale_batch_preview)
 from backend.app.services.phase8_service import data_quality_audit, freeze_dataset
 from backend.app.services.era5_sources import load_source_state, probe_source, set_default_source, source_descriptors
 
@@ -74,6 +74,16 @@ def batch_preview(per_split:int=Query(2,ge=1,le=10)):return ok(public_batch_prev
 @router.post("/public-batches",status_code=202)
 def create_batch(per_split:int=Query(2,ge=1,le=10)):
     try:return ok(create_public_batch(per_split),"公共 ERA5 受控批次已创建")
+    except ValueError as exc:raise HTTPException(409,str(exc))
+
+
+@router.get("/scale-batches/preview")
+def scale_preview(max_samples:int=Query(12,ge=1,le=12)):return ok(scale_batch_preview(max_samples))
+
+
+@router.post("/scale-batches",status_code=202)
+def create_scaled_batch(max_samples:int=Query(12,ge=1,le=12)):
+    try:return ok(create_scale_batch(max_samples),"规模化真实 ERA5 批次已创建")
     except ValueError as exc:raise HTTPException(409,str(exc))
 
 

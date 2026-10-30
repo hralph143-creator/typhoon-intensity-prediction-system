@@ -16,6 +16,7 @@ data/processed/*
 data/cache/*
 data/reports/*
 data/backups/*
+data/exports/*
 output/pdf/*.pdf
 /云海风暴旋涡图标.png
 !data/**/.gitkeep

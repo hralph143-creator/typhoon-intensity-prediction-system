@@ -6,7 +6,7 @@ import {getTyphoons} from '@/api/typhoons'
 import {getExperiments} from '@/api/ml'
 const types=ref<any[]>([]),reports=ref<ReportRecord[]>([]),typhoons=ref<any[]>([]),experiments=ref<any[]>([]),loading=ref(false),preview=ref(''),previewOpen=ref(false)
 const form=ref({report_type:'typhoon',title:'',typhoon_id:undefined as number|undefined,experiment_id:undefined as string|undefined,force:false})
-const successfulExperiments=computed(()=>experiments.value.filter(x=>x.status==='succeeded'&&x.model_type!=='safnet'))
+const successfulExperiments=computed(()=>experiments.value.filter(x=>x.status==='succeeded'))
 let timer:number|undefined
 async function refresh(){reports.value=await getReports()}
 async function submit(){loading.value=true;try{await createReport(form.value);ElMessage.success('报告任务已创建');await refresh()}finally{loading.value=false}}
