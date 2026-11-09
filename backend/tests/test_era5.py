@@ -50,6 +50,9 @@ def test_era5_api_empty_state():
         assert response.status_code==200 and "configured" in response.json()["data"]
         stats=client.get("/api/era5/samples/statistics").json()["data"]
         assert stats["shape"]==[4,2,31,31]
+        samples=client.get("/api/era5/samples",params={"split":"test","limit":10})
+        assert samples.status_code==200 and samples.json()["data"]==[]
+        assert client.get("/api/era5/samples/not-found").status_code==404
 
 
 def test_rejects_wrong_units(tmp_path):

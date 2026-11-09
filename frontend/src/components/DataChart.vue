@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { init, use, type ECharts, type EChartsCoreOption } from 'echarts/core'
-import { BarChart, LineChart } from 'echarts/charts'
+import { BarChart, LineChart, ScatterChart } from 'echarts/charts'
 import { CanvasRenderer } from 'echarts/renderers'
 import { GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, DataZoomComponent } from 'echarts/components'
 
-use([BarChart, LineChart, CanvasRenderer, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, DataZoomComponent])
+use([BarChart, LineChart, ScatterChart, CanvasRenderer, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent, DataZoomComponent])
 const props = defineProps<{ option: EChartsCoreOption; selectedIndex?: number; label: string }>()
 const emit = defineEmits<{ select: [index: number] }>()
 const root = ref<HTMLDivElement>()

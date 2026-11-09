@@ -2,13 +2,13 @@ import platform
 import sys
 
 from fastapi import APIRouter,HTTPException,Query
-from fastapi.responses import Response
+from fastapi.responses import Response,FileResponse
 from pydantic import BaseModel,Field
 
 from backend.app.core.config import PROJECT_ROOT, settings
 from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.system import RuntimeInfo
-from backend.app.services.system_management import cleanup_temporary,create_backup,delete_backup,exported_log,list_backups,maintenance_preview,read_logs,restore_backup,runtime_status,verify_backup
+from backend.app.services.system_management import backup_file,cleanup_temporary,create_backup,delete_backup,exported_log,list_backups,maintenance_preview,read_logs,restore_backup,runtime_status,verify_backup
 
 
 router = APIRouter(prefix="/system", tags=["系统信息"])
@@ -56,6 +56,11 @@ def backup_create(payload:BackupCreate):
 @router.post("/backups/{backup_id}/verify")
 def backup_verify(backup_id:str):
     try:return ok(verify_backup(backup_id),"备份校验通过")
+    except (LookupError,ValueError) as exc:fail(exc)
+@router.get("/backups/{backup_id}/download")
+def backup_download(backup_id:str):
+    try:
+        path=backup_file(backup_id);return FileResponse(path,media_type="application/vnd.sqlite3",filename=f"cloudwave-backup-{backup_id}.sqlite3")
     except (LookupError,ValueError) as exc:fail(exc)
 @router.post("/backups/{backup_id}/restore")
 def backup_restore(backup_id:str,confirmed:bool=False):

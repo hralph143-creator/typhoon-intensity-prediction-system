@@ -21,6 +21,8 @@ export const era5Api={
   retryJob:(id:string)=>apiClient.post(`/era5/jobs/${id}/retry`).then(r=>r.data.data),
   files:()=>apiClient.get('/era5/files').then(r=>r.data.data),
   statistics:()=>apiClient.get('/era5/samples/statistics',{timeout:30000}).then(r=>r.data.data),
+  samples:(params?:object)=>apiClient.get('/era5/samples',{params,timeout:30000}).then(r=>r.data.data),
+  sample:(id:string)=>apiClient.get(`/era5/samples/${id}`,{timeout:30000}).then(r=>r.data.data),
   audit:()=>apiClient.get('/era5/samples/audit',{timeout:30000}).then(r=>r.data.data),
   freeze:()=>apiClient.post('/era5/samples/freeze').then(r=>r.data.data),
   build:(limit?:number)=>apiClient.post('/era5/samples/build',null,{params:{limit}}).then(r=>r.data.data),

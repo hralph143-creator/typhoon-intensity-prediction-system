@@ -27,14 +27,39 @@ def stop_created_process(process: subprocess.Popen) -> None:
         process.kill()
 
 
+def stop_project_services() -> int:
+    """Stop only processes whose executable/command line resolves inside this project."""
+    if sys.platform != "win32":
+        print("[提示] 当前停止命令仅用于 Windows 启动方式。")
+        return 2
+    root=str(ROOT.resolve()).replace("'","''")
+    python=str((ROOT/".venv/Scripts/python.exe").resolve()).replace("'","''")
+    script=(f"$root='{root}';$python='{python}';"
+            "$items=Get-CimInstance Win32_Process | Where-Object {"
+            "($_.Name -eq 'python.exe' -and $_.ExecutablePath -eq $python -and $_.CommandLine -like '*backend.app.main:app*') -or "
+            "($_.Name -eq 'node.exe' -and $_.CommandLine -like ('*'+$root+'\\frontend\\node_modules*') -and $_.CommandLine -like '*vite*')};"
+            "$count=0;foreach($item in $items){"
+            "$result=& taskkill.exe /PID $item.ProcessId /T /F 2>&1;"
+            "if($LASTEXITCODE -eq 0){$count++}};Write-Output $count")
+    completed=subprocess.run(["powershell.exe","-NoProfile","-Command",script],capture_output=True,text=True,creationflags=subprocess.CREATE_NO_WINDOW)
+    if completed.returncode:
+        print(f"[错误] 停止服务失败：{completed.stderr.strip()}")
+        return 1
+    count=int((completed.stdout.strip() or "0").splitlines()[-1])
+    print(f"[成功] 已停止本项目服务进程 {count} 个。" if count else "[提示] 当前没有运行中的本项目服务。")
+    return 0
+
+
 def main() -> int:
     configure_output()
     if sys.argv[1:] == ["--check"]:
         from scripts.check_environment import main as check
         return check()
+    if sys.argv[1:] == ["--stop"]:
+        return stop_project_services()
     if sys.argv[1:]:
         print(f"[错误] 不支持的参数：{' '.join(sys.argv[1:])}")
-        print("可用命令：run.bat 或 run.bat --check")
+        print("可用命令：run.bat、run.bat --check 或 run.bat --stop")
         return 2
     try:
         from backend.app.core.config import settings

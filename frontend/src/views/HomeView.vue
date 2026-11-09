@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh,Search,DataAnalysis,Aim,TrendCharts,Document } from '@element-plus/icons-vue'
 import { getStatistics } from '@/api/typhoons'
+import { getExperiments,getModels } from '@/api/ml'
+import { getReports } from '@/api/reports'
+import { era5Api } from '@/api/era5'
 import DataChart from '@/components/DataChart.vue'
 import StatusIndicator from '@/components/StatusIndicator.vue'
 import { useSystemStore } from '@/stores/system'
@@ -9,7 +12,7 @@ import type { Statistics } from '@/types/typhoon'
 import { jobLabel, utc } from '@/utils/typhoon'
 
 const system = useSystemStore()
-const statistics = ref<Statistics | null>(null)
+const statistics = ref<Statistics | null>(null),cmaStatistics=ref<Statistics|null>(null),era5=ref<any>(),models=ref<any[]>([]),experiments=ref<any[]>([]),reports=ref<any[]>([])
 const error = ref('')
 const yearlyOption = computed(() => ({
   tooltip: { trigger: 'axis' }, grid: { left: 45, right: 20, top: 30, bottom: 35 },
@@ -20,8 +23,10 @@ const yearlyOption = computed(() => ({
 async function refresh() {
   error.value = ''
   await system.refresh()
-  try { statistics.value = await getStatistics() } catch { statistics.value = null; error.value = '历史数据统计暂不可用。' }
+  try { [statistics.value,cmaStatistics.value,era5.value,models.value,experiments.value,reports.value]=await Promise.all([getStatistics('ibtracs'),getStatistics('cma'),era5Api.statistics(),getModels(),getExperiments(),getReports()]) } catch { statistics.value = null; error.value = '系统概览暂不可用，请稍后刷新。' }
 }
+const latestExperiment=computed(()=>experiments.value[0]),latestReport=computed(()=>reports.value[0])
+const shortcuts=[['/history','查询历史台风',Search],['/wind-field','查看 ERA5 风场',DataAnalysis],['/prediction','执行强度预测',Aim],['/evaluation','查看模型评估',TrendCharts],['/reports','生成分析报告',Document]] as const
 onMounted(refresh)
 </script>
 
@@ -29,15 +34,11 @@ onMounted(refresh)
   <section v-loading="system.loading" class="page-stack">
     <div class="page-heading"><h2>系统运行概览</h2><el-button :icon="Refresh" @click="refresh">刷新状态</el-button></div>
     <el-alert v-if="system.error || error" :title="system.error || error" type="error" :closable="false" show-icon />
-    <div class="status-grid">
-      <article class="status-card"><span class="card-label">后端服务与数据库</span><StatusIndicator :active="system.backendOnline && system.health?.database === 'connected'" active-text="运行正常" inactive-text="连接失败"/><strong>{{ system.info?.version ? `版本 ${system.info.version}` : '等待服务响应' }}</strong></article>
-      <article class="status-card"><span class="card-label">MAIN 主轨迹事件</span><strong class="stat-value">{{ statistics?.typhoon_count.toLocaleString() ?? '—' }}<small> 个事件</small></strong><span class="muted-note">全部轨迹事件 {{ statistics?.all_event_count?.toLocaleString() ?? '—' }} 个</span><RouterLink to="/history">打开历史档案 →</RouterLink></article>
-      <article class="status-card"><span class="card-label">观测记录</span><strong class="stat-value">{{ statistics?.observation_count.toLocaleString() ?? '—' }}<small> 条</small></strong><span class="muted-note">主轨迹观测 {{ statistics?.main_observation_count.toLocaleString() ?? '—' }} 条</span></article>
-      <article class="status-card"><span class="card-label">数据覆盖年份</span><strong>{{ statistics?.years.length ? `${Math.min(...statistics.years)}—${Math.max(...statistics.years)}` : '暂无数据' }}</strong><span class="muted-note">仅统计已入库数据</span></article>
-    </div>
+    <div class="status-grid overview-grid"><article class="status-card"><span class="card-label">IBTrACS 台风事件</span><strong class="stat-value">{{statistics?.all_event_count?.toLocaleString()??'—'}}</strong><span>观测 {{statistics?.observation_count?.toLocaleString()??'—'}} 条</span></article><article class="status-card"><span class="card-label">CMA 独立台风事件</span><strong class="stat-value">{{cmaStatistics?.all_event_count?.toLocaleString()??'—'}}</strong><span>观测 {{cmaStatistics?.observation_count?.toLocaleString()??'—'}} 条</span></article><article class="status-card"><span class="card-label">ERA5 四时次样本</span><strong class="stat-value">{{era5?.spatiotemporal_samples??'—'}}</strong><span>{{era5?.processing_version??'等待数据'}}</span></article><article class="status-card"><span class="card-label">可用模型</span><strong class="stat-value">{{models.length}}</strong><span>历史实验 {{experiments.length}} 项</span></article></div>
+    <el-card shadow="never" class="data-card quick-card"><template #header><strong>快捷操作</strong></template><div class="quick-actions"><RouterLink v-for="item in shortcuts" :key="item[0]" :to="item[0]"><el-icon><component :is="item[2]"/></el-icon><span>{{item[1]}}</span></RouterLink></div></el-card>
     <el-card v-if="statistics?.typhoon_count" shadow="never" class="data-card"><template #header><strong>年度 MAIN 主轨迹事件数量</strong></template><DataChart :option="yearlyOption" label="已导入真实台风的年度 MAIN 主轨迹事件统计" /></el-card>
     <el-alert v-else-if="statistics" title="尚无历史台风数据" description="请在“历史台风数据 → 数据接入与任务”下载 NOAA 官方数据，或上传真实 IBTrACS CSV 文件。" type="info" :closable="false" show-icon />
-    <el-card shadow="never" class="data-card"><template #header><div class="card-header"><strong>数据源接入状态</strong><RouterLink to="/settings">数据源管理 →</RouterLink></div></template><el-table :data="system.dataSources" empty-text="后端未返回数据源状态"><el-table-column prop="name" label="数据源" min-width="210"/><el-table-column prop="provider" label="提供机构" min-width="150"/><el-table-column label="状态" width="160"><template #default="{row}"><StatusIndicator :active="row.connected" :active-text="row.status_text" :inactive-text="row.status_text"/></template></el-table-column><el-table-column prop="file_count" label="本地文件" width="100"/><el-table-column prop="local_path" label="存储位置" min-width="260" show-overflow-tooltip/></el-table></el-card>
-    <el-card v-if="statistics" shadow="never" class="data-card"><template #header><strong>最近数据处理</strong></template><el-descriptions :column="2"><el-descriptions-item label="最近成功导入">{{ utc(statistics.last_import_at) }}</el-descriptions-item><el-descriptions-item label="最近任务">{{ statistics.latest_job ? jobLabel(statistics.latest_job.status) : '暂无任务' }}</el-descriptions-item><el-descriptions-item label="CMA 风速缺测／特殊编码">{{ statistics.missing_cma_wind_count.toLocaleString() }} 条</el-descriptions-item><el-descriptions-item label="模型与实验"><RouterLink to="/evaluation">查看真实评估 →</RouterLink></el-descriptions-item></el-descriptions></el-card>
+    <div class="home-bottom"><el-card shadow="never" class="data-card"><template #header><strong>系统状态</strong></template><el-descriptions :column="1"><el-descriptions-item label="后端与数据库"><StatusIndicator :active="system.backendOnline&&system.health?.database==='connected'" active-text="运行正常" inactive-text="连接失败"/></el-descriptions-item><el-descriptions-item label="最近数据导入">{{utc(statistics?.last_import_at)}}</el-descriptions-item><el-descriptions-item label="最近处理任务">{{statistics?.latest_job?jobLabel(statistics.latest_job.status):'暂无任务'}}</el-descriptions-item></el-descriptions></el-card><el-card shadow="never" class="data-card"><template #header><strong>最近模型实验</strong></template><el-empty v-if="!latestExperiment" description="尚无实验记录" :image-size="56"/><el-descriptions v-else :column="1"><el-descriptions-item label="实验">{{latestExperiment.name}}</el-descriptions-item><el-descriptions-item label="模型">{{latestExperiment.model_type.toUpperCase()}}</el-descriptions-item><el-descriptions-item label="完成时间">{{utc(latestExperiment.finished_at)}}</el-descriptions-item></el-descriptions></el-card><el-card shadow="never" class="data-card"><template #header><strong>最近科研报告</strong></template><el-empty v-if="!latestReport" description="尚无报告记录" :image-size="56"/><el-descriptions v-else :column="1"><el-descriptions-item label="报告">{{latestReport.report_title}}</el-descriptions-item><el-descriptions-item label="状态">{{latestReport.report_status}}</el-descriptions-item><el-descriptions-item label="生成时间">{{utc(latestReport.completed_at)}}</el-descriptions-item></el-descriptions></el-card></div>
   </section>
 </template>
+<style scoped>.overview-grid{grid-template-columns:repeat(4,minmax(180px,1fr))}.quick-actions{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.quick-actions a{display:flex;align-items:center;gap:10px;padding:15px;border:1px solid var(--app-border);background:#f8fafc;color:#29445f;border-radius:4px}.quick-actions a:hover{border-color:#8cb4d2;text-decoration:none;background:#f1f7fb}.home-bottom{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:1180px){.quick-actions{grid-template-columns:repeat(3,1fr)}.home-bottom{grid-template-columns:1fr}.overview-grid{grid-template-columns:repeat(2,1fr)}}</style>

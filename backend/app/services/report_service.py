@@ -67,7 +67,10 @@ def _comprehensive_snapshot(db)->dict:
     phase8_splits={name:{"samples":sum(x.split==name for x in phase8),"events":len({x.sid for x in phase8 if x.split==name})} for name in ("train","validation","test")}
     safnet_runs=list(db.scalars(select(TrainingExperiment).where(TrainingExperiment.model_type=="safnet",TrainingExperiment.status=="succeeded")))
     formal=sum((x.split_statistics or {}).get("experiment_level")=="formal" for x in safnet_runs)
-    return {"kind":"comprehensive","source":"NOAA IBTrACS v04r01；中国气象局 CMA 独立最佳路径；ECMWF/Copernicus ERA5；统一历史回测实验","statistics":{"event_count":event_count,"main_event_count":main_events,"observation_count":observation_count,"era5_file_count":db.scalar(select(func.count()).select_from(Era5File)) or 0,"spatiotemporal_sample_count":len(phase8),"phase8_splits":phase8_splits,"phase8_event_count":len({x.sid for x in phase8})},"experiments":experiments,"safnet":{"architecture_complete":True,"successful_experiment_count":len(safnet_runs),"formal_experiment_count":formal},"common_test":compare_common_test_set()}
+    common=compare_common_test_set()
+    # 推理耗时受机器负载影响，不属于科研快照内容，不能让相同数据重复生成报告。
+    common={**common,"items":[{key:value for key,value in item.items() if key!="inference_seconds"} for item in common.get("items",[])]}
+    return {"kind":"comprehensive","source":"NOAA IBTrACS v04r01；中国气象局 CMA 独立最佳路径；ECMWF/Copernicus ERA5；统一历史回测实验","statistics":{"event_count":event_count,"main_event_count":main_events,"observation_count":observation_count,"era5_file_count":db.scalar(select(func.count()).select_from(Era5File)) or 0,"spatiotemporal_sample_count":len(phase8),"phase8_splits":phase8_splits,"phase8_event_count":len({x.sid for x in phase8})},"experiments":experiments,"safnet":{"architecture_complete":True,"successful_experiment_count":len(safnet_runs),"formal_experiment_count":formal},"common_test":common}
 
 
 def snapshot(report_type:str,typhoon_id:int|None=None,experiment_id:str|None=None)->dict:

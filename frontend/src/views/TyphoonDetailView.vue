@@ -102,4 +102,3 @@ onMounted(load)
     </template>
   </section>
 </template>
-<style scoped>.page-stack>.el-alert.el-alert--info{display:none}</style>

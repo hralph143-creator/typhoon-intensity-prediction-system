@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from backend.app.core.config import settings
 from backend.app.services.era5_service import (benchmark_source, build_spatiotemporal_samples, cancel_job, connection_test, create_download_job,
     cancel_public_batch, create_public_batch, credential_status, download_public_sample, get_public_batch, list_files,
-    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, resume_public_batch, retry_job, sample_statistics, create_scale_batch, scale_batch_preview)
+    list_jobs, list_public_batches, preview_plans, public_batch_preview, register_file, resume_public_batch, retry_job, sample_statistics, create_scale_batch, scale_batch_preview, list_spatiotemporal_samples, spatiotemporal_sample_preview)
 from backend.app.services.phase8_service import data_quality_audit, freeze_dataset
 from backend.app.services.era5_sources import load_source_state, probe_source, set_default_source, source_descriptors
 
@@ -169,8 +169,18 @@ def build(limit:int|None=Query(None,ge=1,le=10000)):
 def statistics():return ok(sample_statistics())
 
 
+@router.get("/samples")
+def samples(sid:str|None=None,split:str|None=Query(None,pattern="^(train|validation|test)$"),limit:int=Query(100,ge=1,le=500)):return ok(list_spatiotemporal_samples(sid,split,limit))
+
+
 @router.get("/samples/audit")
 def phase8_audit():return ok(data_quality_audit())
+
+
+@router.get("/samples/{sample_id}")
+def sample_detail(sample_id:str):
+    try:return ok(spatiotemporal_sample_preview(sample_id))
+    except LookupError as exc:raise HTTPException(404,str(exc))
 
 
 @router.post("/samples/freeze")

@@ -9,7 +9,7 @@ async function post<T>(path: string, data?: unknown) {
   return (await apiClient.post<ApiResponse<T>>(path, data)).data.data
 }
 export const getTyphoons = (params: TyphoonFilters) => get<Page<TyphoonEvent>>('/typhoons', params)
-export const getStatistics = () => get<Statistics>('/typhoons/statistics')
+export const getStatistics = (source:'ibtracs'|'cma'='ibtracs') => get<Statistics>('/typhoons/statistics',{source})
 export const getTyphoon = (id: number) => get<TyphoonDetail>(`/typhoons/${id}`)
 export const getTrack = (id: number, track_type: string) => get<TrackResponse>(`/typhoons/${id}/track`, { track_type })
 export const getIntensity = (id: number, track_type: string) => get<TrackResponse>(`/typhoons/${id}/intensity`, { track_type })

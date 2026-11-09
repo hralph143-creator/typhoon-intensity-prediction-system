@@ -39,6 +39,7 @@ def test_system_status_logs_and_confirmations():
     with TestClient(app) as client:
         assert client.get("/api/system/status").json()["data"]["database"]=="connected"
         assert client.get("/api/system/logs",params={"limit":5}).status_code==200
+        assert client.get("/api/system/backups/not-found/download").status_code==404
         assert client.post("/api/system/maintenance/cleanup").status_code==409
 
 

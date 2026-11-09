@@ -93,6 +93,13 @@ def verify_backup(backup_id:str)->dict:
     if not valid:raise ValueError("备份校验和或架构版本不一致")
     return {**result,"integrity":"ok"}
 
+def backup_file(backup_id:str)->Path:
+    verify_backup(backup_id)
+    with SessionLocal() as db:
+        row=db.get(SystemBackup,backup_id);path=Path(row.backup_path)
+    if not _inside(path,settings.backup_dir) or not path.is_file():raise LookupError("备份文件不存在")
+    return path
+
 def _active_jobs()->int:
     with SessionLocal() as db:
         return sum(db.scalar(select(func.count()).select_from(model).where(column.in_(ACTIVE))) or 0 for model,column in [(ImportJob,ImportJob.status),(TrainingExperiment,TrainingExperiment.status),(Era5DownloadJob,Era5DownloadJob.status),(AnalysisReport,AnalysisReport.report_status)])

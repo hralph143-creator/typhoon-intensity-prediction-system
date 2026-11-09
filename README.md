@@ -1,6 +1,6 @@
 # 云浪智析——基于时空注意力的台风强度预测系统
 
-这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.8.0，第八阶段：ERA5 多事件规模化扩容与 SAF-Net 正式训练验收**。
+这是面向台风强度演变研究的前后端分离科研软件。当前版本为 **0.9.0，第九阶段：功能全面完善、界面深度优化与软件交付验收**。
 
 已接入 NOAA 官方 IBTrACS、中国气象局 CMA 独立最佳路径和 ECMWF/Copernicus ERA5 真实风场，并实际训练 Persistence、Ridge、LSTM、GRU 和 SAF-Net。最终 ERA5 冻结集包含 90 个四时次样本、32 个独立事件，训练/验证/测试为 50/20/20 条；SAF-Net 已完成三个随机种子的真实训练，并严格按验证集选择最终权重。当前正式结果没有显示 SAF-Net 优于时序基线，系统和报告会如实展示该结论。
 
@@ -31,7 +31,7 @@ cd ..
 - 前端：http://127.0.0.1:5173
 - API 文档：http://127.0.0.1:8000/docs
 
-环境检查：`run.bat --check`。启动器检查实际服务就绪状态，复用已运行的本项目服务；其他程序占用端口时会明确提示。启动失败时双击窗口会保留错误信息，后台日志位于 `logs/`。
+环境检查：`run.bat --check`。安全退出本项目服务：`run.bat --stop`。启动器检查实际服务就绪状态，复用已运行的本项目服务；其他程序占用端口时会明确提示。退出命令只识别当前项目虚拟环境和前端 Vite 进程，并连同子进程关闭。启动失败时双击窗口会保留错误信息，后台日志位于 `logs/`。
 
 ## 真实数据获取与使用
 
@@ -89,10 +89,10 @@ npm run type-check
 npm run test
 npm run build
 cd ..
-node scripts\browser_smoke.cjs
+node scripts\phase9_edge_acceptance.cjs
 ```
 
-浏览器验收要求前后端已启动且存在真实入库数据，使用本机 Edge 无界面执行。截图和报告位于 `logs/browser-qa/`；可设 `TEST_REAL_UPLOAD=1` 附加真实原始文件重复上传验证。自动化后端样例仅进入隔离测试数据库，不污染正式数据。
+浏览器验收要求前后端已启动且存在真实入库数据，使用本机 Edge 无界面执行。第九阶段 15 张验收截图和机器可读报告位于 `docs/screenshots/phase9/`。自动化后端样例仅进入隔离测试数据库，不污染正式数据。
 
 ## 目录说明
 
@@ -126,6 +126,7 @@ docs/          项目文档
 - `POST /api/ml/safnet/predict`：使用已训练 SAF-Net 和完整时空样本推理，并可返回注意力
 - `GET /api/ml/export/experiments`：导出 CSV 或 Excel 实验记录
 - `GET /api/era5/status`、`POST /api/era5/connection-test`：安全检查凭据和客户端状态
+- `GET /api/era5/samples`、`GET /api/era5/samples/{id}`：真实四时次样本列表与 U10/V10 预览
 - `GET /api/era5/plans`、`POST/GET /api/era5/jobs`：小范围计划和可恢复下载任务
 - `POST /api/era5/import`、`GET /api/era5/files`：NetCDF 质检、归档和追溯
 - `POST /api/era5/samples/build`、`GET /api/era5/samples/statistics`：构建和统计四时次样本
@@ -134,6 +135,7 @@ docs/          项目文档
 - `GET /api/exports/workbook`、`/{kind}.csv`、`/model-comparison.png`：科研成果导出
 - `GET /api/ml/comparison/detail`、`/predictions`：严格模型比较与预测记录筛选
 - `GET /api/system/status`、`/logs`、`/backups`、`/maintenance/preview`：运行与维护
+- `GET /api/system/backups/{id}/download`：校验后下载 SQLite 一致性备份
 
 接口返回统一 `success/message/data` 格式；错误返回 `success=false/message/error`。日期统一 UTC，风速 m/s、气压 hPa，原始风速 knots 和机构保留。SQLite WAL 模式允许导入事务期间继续查询旧的已提交数据。
 
@@ -144,6 +146,8 @@ docs/          项目文档
 第八阶段新增版本化数据质量门禁、SHA-256 冻结清单、ARCO 远程读取预算、独立事件优先选样、批次断点恢复及事件簇 Bootstrap。ARCO 分析就绪存储按单时次全局空间块组织，小范围切片仍可能产生显著读取放大，因此默认每组仅 1 条、单并发且单批保守远程预算 4 GiB；未达到 50/20/20 时系统继续标记为工程性小样本试验。详见 [第八阶段验收报告](docs/phase-8-acceptance.md)。
 
 最终补充开发已把真实样本扩充至训练 50 条/20 事件、验证 20 条/6 事件、测试 20 条/6 事件，并完成三种子正式训练、验证集选模、五模型共同测试、事件级 Bootstrap、注意力输出和 HTML/PDF 报告。详见 [第八阶段最终科研实验验收](docs/phase-8-final-acceptance.md)。
+
+第九阶段完成了真实数据首页总览、ERA5 样本交互风场、模型文件校验、预测曲线与注意力导出、报告筛选、备份下载、一键安全退出和统一界面规范，并通过 Edge 全流程、PDF 可视化、前后端测试与生产构建验收。详见 [第九阶段验收报告](docs/phase-9-acceptance.md)。
 
 - [数据来源与署名](docs/data-sources.md)
 - [字段与清洗规则](docs/data-fields.md)
@@ -173,7 +177,11 @@ docs/          项目文档
 - [第六阶段验收报告](docs/phase-6-acceptance.md)
 - [第八阶段验收报告](docs/phase-8-acceptance.md)
 - [第八阶段最终科研实验验收](docs/phase-8-final-acceptance.md)
+- [第九阶段功能总览](docs/phase-9-feature-overview.md)
+- [第九阶段界面验收](docs/phase-9-ui-acceptance.md)
+- [第九阶段截图索引](docs/phase-9-screenshot-index.md)
+- [第九阶段交付验收](docs/phase-9-acceptance.md)
 
 当前同时保存 NOAA IBTrACS 中的 CMA 字段和独立 CMA TXT 数据源，查询时可切换来源。ERA5 已通过公共 ARCO 镜像接入，CDS 个人授权仅作为扩展下载方式。地图底图来自 OpenStreetMap；网络不可用时显示经纬网与真实路径。Leaflet、ECharts 与风场 Canvas 均由真实接口数据动态渲染，未使用截图伪装交互图表。
 
-原始文件、数据库、任务锁、模型权重、生成报告、备份、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。本次工作止于第八阶段最终验收，不自动进入下一阶段。
+原始文件、数据库、任务锁、模型权重、生成报告、备份、虚拟环境、前端依赖和运行日志均不纳入 Git；请单独备份科研数据。系统仅供科研教学，不构成业务气象预报或预警。本次工作止于第九阶段交付验收，不自动进入下一阶段。

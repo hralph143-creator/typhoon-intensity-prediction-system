@@ -659,6 +659,24 @@ def sample_statistics() -> dict:
     return {"era5_files":files,"wind_fields":fields,"spatiotemporal_samples":total,"splits":splits,"processing_version":PROCESSING_VERSION,"historical_versions":versions,"shape":[4,2,31,31],"dataset_version":dataset_version("strict"),"strict_reference":split_statistics(build_samples("strict")),"preview":preview}
 
 
+def list_spatiotemporal_samples(sid:str|None=None,split:str|None=None,limit:int=100)->list[dict]:
+    with SessionLocal() as db:
+        stmt=select(SpatiotemporalSample).where(SpatiotemporalSample.processing_version==PROCESSING_VERSION)
+        if sid:stmt=stmt.where(SpatiotemporalSample.sid.icontains(sid,autoescape=True))
+        if split:stmt=stmt.where(SpatiotemporalSample.split==split)
+        rows=db.scalars(stmt.order_by(SpatiotemporalSample.forecast_time.desc()).limit(limit))
+        return [{"id":x.id,"sid":x.sid,"forecast_time":_iso(x.forecast_time),"target_time":_iso(x.target_time),"split":x.split,"target_wind":x.target_wind,"shape":x.shape,"processing_version":x.processing_version,"quality_status":"valid" if (x.quality_report or {}).get("finite") else "invalid"} for x in rows]
+
+
+def spatiotemporal_sample_preview(sample_id:str)->dict:
+    with SessionLocal() as db:
+        row=db.get(SpatiotemporalSample,sample_id)
+        if not row or row.processing_version!=PROCESSING_VERSION:raise LookupError("ERA5 时空样本不存在")
+        fields=list(db.scalars(select(WindFieldSample).where(WindFieldSample.id.in_(row.wind_field_ids)).order_by(WindFieldSample.observation_time)))
+        cube=np.load(row.local_path)["wind"];speed=np.sqrt(cube[:,0]**2+cube[:,1]**2);report=row.quality_report or {}
+        return {"id":row.id,"sid":row.sid,"forecast_time":_iso(row.forecast_time),"target_time":_iso(row.target_time),"split":row.split,"target_wind":row.target_wind,"temporal_features":row.temporal_features,"shape":list(cube.shape),"processing_version":row.processing_version,"input_times":report.get("input_times",[]),"sha256":report.get("sha256"),"source_file_ids":report.get("source_file_ids",[]),"centers":[{"latitude":x.center_latitude,"longitude":x.center_longitude} for x in fields],"u":cube[:,0].tolist(),"v":cube[:,1].tolist(),"speed_range":[float(speed.min()),float(speed.max())],"finite":bool(np.isfinite(cube).all())}
+
+
 def create_download_job(payload: dict) -> dict:
     if not credential_status()["configured"]: raise ValueError("未配置 CDS API 凭据，不能创建在线下载任务")
     request = payload["request"]; _validate_small_request(request); fingerprint = _request_hash(request)

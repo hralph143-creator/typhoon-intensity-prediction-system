@@ -48,7 +48,7 @@ onMounted(async () => {
             <el-form-item label="台风名称"><el-input v-model="filters.name" clearable placeholder="如 HAIYAN" @keyup.enter="load(true)" /></el-form-item>
             <el-form-item label="台风编号（SID）"><el-input v-model="filters.sid" clearable placeholder="输入编号片段" @keyup.enter="load(true)" /></el-form-item>
             <el-form-item label="最强 CMA 等级"><el-select v-model="filters.category" clearable placeholder="全部等级"><el-option v-for="(name, value) in categoryNames" :key="value" :label="name" :value="Number(value)" /></el-select></el-form-item>
-            <el-form-item label="数据来源"><el-select v-model="filters.source"><el-option label="NOAA IBTrACS" value="ibtracs" /><el-option label="中国气象局 CMA 独立数据" value="cma" /></el-select></el-form-item>
+            <el-form-item label="数据来源"><el-select v-model="filters.source" @change="load(true)"><el-option label="NOAA IBTrACS" value="ibtracs" /><el-option label="中国气象局 CMA 独立数据" value="cma" /></el-select></el-form-item>
             <el-form-item label="最大风速下限（m/s）"><el-input-number v-model="filters.min_wind" :min="0" :max="150" :controls="false" placeholder="不限" /></el-form-item>
             <el-form-item label="最大风速上限（m/s）"><el-input-number v-model="filters.max_wind" :min="0" :max="150" :controls="false" placeholder="不限" /></el-form-item>
             <el-form-item label="排序"><el-select v-model="filters.sort_by"><el-option label="年份" value="season" /><el-option label="名称" value="name" /><el-option label="CMA 最大风速" value="maximum_wind" /><el-option label="起始时间" value="first_observation" /></el-select></el-form-item>

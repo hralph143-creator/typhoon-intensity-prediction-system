@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import random
 import shutil
@@ -231,15 +232,27 @@ def get_experiment(experiment_id):
         row=db.get(TrainingExperiment,experiment_id)
         if not row: raise LookupError("实验不存在")
         result=experiment_dict(row); model=db.scalar(select(ModelArtifact).where(ModelArtifact.experiment_id==experiment_id))
-        result["model"]={column.name:_utc(getattr(model,column.name)) for column in ModelArtifact.__table__.columns} if model else None
+        result["model"]=_artifact_dict(model) if model else None
         return result
+
+
+def _artifact_dict(row:ModelArtifact)->dict:
+    item={column.name:_utc(getattr(row,column.name)) for column in ModelArtifact.__table__.columns}
+    model_path=Path(row.model_path);metadata_path=Path(row.metadata_path);checksum_valid=None
+    if model_path.is_file() and metadata_path.is_file():
+        try:
+            expected=json.loads(metadata_path.read_text(encoding="utf-8")).get("sha256")
+            checksum_valid=hashlib.sha256(model_path.read_bytes()).hexdigest()==expected if expected else None
+        except (OSError,ValueError,TypeError):checksum_valid=False
+    item.update(model_filename=model_path.name,metadata_filename=metadata_path.name,weight_exists=model_path.is_file(),metadata_exists=metadata_path.is_file(),checksum_valid=checksum_valid)
+    return item
 
 
 def list_models():
     with SessionLocal() as db:
         results=[]
         for row in db.scalars(select(ModelArtifact).order_by(ModelArtifact.created_at.desc())):
-            item={column.name:_utc(getattr(row,column.name)) for column in ModelArtifact.__table__.columns}
+            item=_artifact_dict(row)
             item["metrics"]={split:{"overall":detail.get("overall")} for split,detail in (row.metrics or {}).items() if isinstance(detail,dict)}
             results.append(item)
         return results
