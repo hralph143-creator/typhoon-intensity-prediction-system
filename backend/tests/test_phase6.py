@@ -16,7 +16,7 @@ from backend.app.services import system_management
 def test_report_types_and_empty_comprehensive_api():
     with TestClient(app) as client:
         types=client.get("/api/reports/types").json()["data"]
-        assert {x["code"] for x in types}=={"typhoon","model","comprehensive"}
+        assert {x["code"] for x in types}=={"typhoon","model","comprehensive","phase10_diagnosis","phase10_ablation","phase10_multi_horizon","phase10_uncertainty","phase10_comprehensive"}
         assert client.post("/api/reports",json={"report_type":"typhoon"}).status_code==409
 
 

@@ -38,7 +38,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="云浪智析科研软件后端接口（第六阶段：科研分析与成果导出）",
+    description="云浪智析科研软件后端接口（第十阶段：多时效概率预测与不确定性评估）",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

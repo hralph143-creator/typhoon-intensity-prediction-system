@@ -19,4 +19,8 @@ export const historicalPredict = (data:object) => post<BacktestResult>('/ml/pred
 export const getSafnetInfo = () => get<any>('/ml/safnet/info')
 export const getSafnetSamples = () => get<any[]>('/ml/safnet/samples')
 export const safnetPredict = (data:object) => post<any>('/ml/safnet/predict',data)
+export const getPhase10Summary = () => get<any>('/ml/phase10/summary')
+export const getPhase10Audit = () => get<any>('/ml/phase10/audit')
+export const getPhase10Samples = (split?:'train'|'validation'|'test') => get<any[]>('/ml/phase10/samples',split?{split}:undefined)
+export const phase10Predict = (sample_id:string) => post<any>('/ml/phase10/predict',{sample_id})
 export async function downloadExperimentExport(format:'csv'|'xlsx') { const response=await apiClient.get(`/ml/export/experiments`,{params:{format},responseType:'blob'}); const url=URL.createObjectURL(response.data); const link=document.createElement('a'); link.href=url; link.download=`experiments.${format}`; link.click(); URL.revokeObjectURL(url) }

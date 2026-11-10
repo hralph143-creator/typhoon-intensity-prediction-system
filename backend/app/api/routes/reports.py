@@ -9,7 +9,7 @@ def ok(data,message="请求成功"):return {"success":True,"message":message,"da
 
 
 class ReportCreate(BaseModel):
-    report_type:str=Field(pattern="^(typhoon|model|comprehensive)$")
+    report_type:str=Field(pattern="^(typhoon|model|comprehensive|phase10_diagnosis|phase10_ablation|phase10_multi_horizon|phase10_uncertainty|phase10_comprehensive)$")
     title:str|None=Field(default=None,max_length=200)
     typhoon_id:int|None=None
     experiment_id:str|None=Field(default=None,max_length=36)

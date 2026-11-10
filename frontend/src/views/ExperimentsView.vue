@@ -1,14 +1,257 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { deleteExperiment, downloadExperimentExport, getExperiment, getExperiments,getModels } from '@/api/ml'
-import type { Experiment,ModelArtifact } from '@/types/ml'
-import { utc } from '@/utils/typhoon'
-const rows=ref<Experiment[]>([]),models=ref<ModelArtifact[]>([]), detail=ref<Experiment>(), modelType=ref(''), status=ref(''), loading=ref(false)
-async function load(){loading.value=true;try{[rows.value,models.value]=await Promise.all([getExperiments({model_type:modelType.value||undefined,status:status.value||undefined}),getModels()])}finally{loading.value=false}}
-async function open(row:Experiment){detail.value=await getExperiment(row.id)}
-async function remove(row:Experiment){await ElMessageBox.confirm(`确定删除实验“${row.name}”及其模型文件吗？此操作不可恢复。`,'二次确认',{type:'warning',confirmButtonText:'确认删除',cancelButtonText:'取消'});await deleteExperiment(row.id);ElMessage.success('实验已删除');detail.value=undefined;await load()}
-onMounted(load)
+import { computed, onMounted, ref } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import {
+  deleteExperiment,
+  downloadExperimentExport,
+  getExperiment,
+  getExperiments,
+  getModels,
+} from "@/api/ml";
+import type { Experiment, ModelArtifact } from "@/types/ml";
+import { utc } from "@/utils/typhoon";
+const rows = ref<Experiment[]>([]),
+  models = ref<ModelArtifact[]>([]),
+  detail = ref<Experiment>(),
+  modelType = ref(""),
+  status = ref(""),
+  loading = ref(false),
+  datasetFilter = ref(""),
+  categoryFilter = ref("");
+const filteredRows = computed(() => rows.value.filter((row: any) => (!datasetFilter.value || row.dataset_version?.includes(datasetFilter.value)) && (!categoryFilter.value || row.config?.experiment_category === categoryFilter.value)));
+async function load() {
+  loading.value = true;
+  try {
+    [rows.value, models.value] = await Promise.all([
+      getExperiments({
+        model_type: modelType.value || undefined,
+        status: status.value || undefined,
+      }),
+      getModels(),
+    ]);
+  } finally {
+    loading.value = false;
+  }
+}
+async function open(row: Experiment) {
+  detail.value = await getExperiment(row.id);
+}
+async function remove(row: Experiment) {
+  await ElMessageBox.confirm(
+    `确定删除实验“${row.name}”及其模型文件吗？此操作不可恢复。`,
+    "二次确认",
+    {
+      type: "warning",
+      confirmButtonText: "确认删除",
+      cancelButtonText: "取消",
+    },
+  );
+  await deleteExperiment(row.id);
+  ElMessage.success("实验已删除");
+  detail.value = undefined;
+  await load();
+}
+onMounted(load);
 </script>
-<template><section v-loading="loading" class="page-stack"><div class="page-heading"><div><h2>模型与实验记录</h2></div><div><el-button @click="downloadExperimentExport('csv')">导出 CSV</el-button><el-button @click="downloadExperimentExport('xlsx')">导出 Excel</el-button></div></div><div class="model-grid"><article v-for="model in models" :key="model.id"><div><strong>{{model.model_type.toUpperCase()}}</strong><span>{{model.name}}</span></div><el-tag :type="model.weight_exists&&(model.checksum_valid!==false)?'success':'danger'">{{model.weight_exists?(model.checksum_valid===false?'校验异常':'权重可用'):'文件缺失'}}</el-tag><small>{{model.dataset_version}}</small></article></div><el-card shadow="never"><div class="inline-controls record-filters"><el-select v-model="modelType" clearable placeholder="全部模型" @change="load"><el-option v-for="m in ['persistence','ridge','lstm','gru','safnet']" :key="m" :value="m" :label="m.toUpperCase()"/></el-select><el-select v-model="status" clearable placeholder="全部状态" @change="load"><el-option v-for="s in ['succeeded','failed','cancelled','interrupted']" :key="s" :value="s" :label="s"/></el-select><el-button @click="load">刷新</el-button></div><el-table :data="rows" empty-text="尚未生成该模型的实验记录" @row-click="open"><el-table-column prop="name" label="实验" min-width="240"/><el-table-column label="模型" width="100"><template #default="{row}">{{row.model_type.toUpperCase()}}</template></el-table-column><el-table-column prop="seed" label="随机种子" width="95"/><el-table-column label="轮次" width="90"><template #default="{row}">{{row.current_epoch}} / {{row.max_epochs}}</template></el-table-column><el-table-column prop="status" label="状态" width="110"/><el-table-column label="测试 MAE" width="110"><template #default="{row}">{{row.metrics?.test?.overall?.mae?.toFixed(3)??'—'}}</template></el-table-column><el-table-column label="完成时间" min-width="180"><template #default="{row}">{{utc(row.finished_at||row.created_at)}}</template></el-table-column><el-table-column label="操作" width="100"><template #default="{row}"><el-button v-if="row.status!=='succeeded'" type="danger" link @click.stop="remove(row)">删除失败记录</el-button><span v-else class="protected-text">已保护</span></template></el-table-column></el-table></el-card><el-dialog v-model="detail" width="min(860px,90vw)" title="实验详情"><template v-if="detail"><el-descriptions :column="2" border><el-descriptions-item label="实验ID">{{detail.id}}</el-descriptions-item><el-descriptions-item label="数据版本">{{detail.dataset_version}}</el-descriptions-item><el-descriptions-item label="模型">{{detail.model_type.toUpperCase()}}</el-descriptions-item><el-descriptions-item label="设备">{{detail.device||'CPU'}}</el-descriptions-item><el-descriptions-item label="随机种子">{{(detail as any).seed}}</el-descriptions-item><el-descriptions-item label="训练轮次">{{detail.current_epoch}} / {{detail.max_epochs}}</el-descriptions-item><el-descriptions-item label="训练开始">{{utc(detail.started_at)}}</el-descriptions-item><el-descriptions-item label="训练结束">{{utc(detail.finished_at)}}</el-descriptions-item><el-descriptions-item label="模型文件">{{detail.model?.model_filename||'无'}}</el-descriptions-item><el-descriptions-item label="权重状态"><el-tag :type="detail.model?.weight_exists?'success':'danger'">{{detail.model?.weight_exists?'文件存在':'文件缺失'}}</el-tag></el-descriptions-item></el-descriptions><h4>训练配置</h4><pre class="json-block">{{JSON.stringify(detail.config,null,2)}}</pre></template></el-dialog></section></template>
-<style scoped>.model-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.model-grid article{min-width:0;background:#fff;border:1px solid var(--app-border);padding:15px;display:flex;flex-direction:column;gap:10px}.model-grid article>div{display:flex;min-width:0;flex-direction:column;gap:4px}.model-grid span,.model-grid small{color:var(--app-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.model-grid .el-tag{width:max-content}.record-filters{margin-bottom:16px}.record-filters .el-select{width:170px}.protected-text{font-size:12px;color:#738394}@media(max-width:1300px){.model-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}</style>
+<template>
+  <section v-loading="loading" class="page-stack">
+    <div class="page-heading">
+      <div><h2>模型与实验记录</h2></div>
+      <div>
+        <el-button @click="downloadExperimentExport('csv')">导出 CSV</el-button
+        ><el-button @click="downloadExperimentExport('xlsx')"
+          >导出 Excel</el-button
+        >
+      </div>
+    </div>
+    <div class="model-grid">
+      <article v-for="model in models" :key="model.id">
+        <div>
+          <strong>{{ model.model_type.toUpperCase() }}</strong
+          ><span>{{ model.name }}</span>
+        </div>
+        <el-tag
+          :type="
+            model.weight_exists && model.checksum_valid !== false
+              ? 'success'
+              : 'danger'
+          "
+          >{{
+            model.weight_exists
+              ? model.checksum_valid === false
+                ? "校验异常"
+                : "权重可用"
+              : "文件缺失"
+          }}</el-tag
+        ><small>{{ model.dataset_version }}</small>
+      </article>
+    </div>
+    <el-card shadow="never"
+      ><div class="inline-controls record-filters">
+        <el-select
+          v-model="modelType"
+          clearable
+          placeholder="全部模型"
+          @change="load"
+          ><el-option
+            v-for="m in ['persistence', 'ridge', 'lstm', 'gru', 'safnet', 'mh_safnet']"
+            :key="m"
+            :value="m"
+            :label="m.toUpperCase()" /></el-select
+        ><el-select
+          v-model="status"
+          clearable
+          placeholder="全部状态"
+          @change="load"
+          ><el-option
+            v-for="s in ['succeeded', 'failed', 'cancelled', 'interrupted']"
+            :key="s"
+            :value="s"
+            :label="s" /></el-select
+        ><el-select v-model="categoryFilter" clearable placeholder="全部类别"><el-option label="消融实验" value="ablation" /></el-select><el-input v-model="datasetFilter" clearable placeholder="数据版本筛选" /><el-button @click="load">刷新</el-button>
+      </div>
+      <el-table
+        :data="filteredRows"
+        empty-text="尚未生成该模型的实验记录"
+        @row-click="open"
+        ><el-table-column
+          prop="name"
+          label="实验"
+          min-width="240"
+        /><el-table-column label="模型" width="100"
+          ><template #default="{ row }">{{
+            row.model_type.toUpperCase()
+          }}</template></el-table-column
+        ><el-table-column
+          label="实验类别"
+          width="110"
+        ><template #default="{ row }">{{ row.config?.experiment_category === 'ablation' ? '消融' : '基线/训练' }}</template></el-table-column><el-table-column
+          label="父实验"
+          min-width="145"
+        ><template #default="{ row }">{{ row.config?.experiment_category === 'ablation' ? '第十阶段消融组' : '—' }}</template></el-table-column><el-table-column
+          prop="seed"
+          label="随机种子"
+          width="95"
+        /><el-table-column label="轮次" width="90"
+          ><template #default="{ row }"
+            >{{ row.current_epoch }} / {{ row.max_epochs }}</template
+          ></el-table-column
+        ><el-table-column
+          prop="status"
+          label="状态"
+          width="110"
+        /><el-table-column label="测试 MAE" width="110"
+          ><template #default="{ row }">{{
+            row.metrics?.test?.overall?.mae?.toFixed(3) ?? "—"
+          }}</template></el-table-column
+        ><el-table-column label="完成时间" min-width="180"
+          ><template #default="{ row }">{{
+            utc(row.finished_at || row.created_at)
+          }}</template></el-table-column
+        ><el-table-column label="操作" width="100"
+          ><template #default="{ row }"
+            ><el-button
+              v-if="row.status !== 'succeeded'"
+              type="danger"
+              link
+              @click.stop="remove(row)"
+              >删除失败记录</el-button
+            ><span v-else class="protected-text">已保护</span></template
+          ></el-table-column
+        ></el-table
+      ></el-card
+    ><el-dialog v-model="detail" width="min(860px,90vw)" title="实验详情"
+      ><template v-if="detail"
+        ><el-descriptions :column="2" border
+          ><el-descriptions-item label="实验ID">{{
+            detail.id
+          }}</el-descriptions-item
+          ><el-descriptions-item label="数据版本">{{
+            detail.dataset_version
+          }}</el-descriptions-item
+          ><el-descriptions-item label="模型">{{
+            detail.model_type.toUpperCase()
+          }}</el-descriptions-item
+          ><el-descriptions-item label="设备">{{
+            detail.device || "CPU"
+          }}</el-descriptions-item
+          ><el-descriptions-item label="随机种子">{{
+            (detail as any).seed
+          }}</el-descriptions-item
+          ><el-descriptions-item label="训练轮次"
+            >{{ detail.current_epoch }} /
+            {{ detail.max_epochs }}</el-descriptions-item
+          ><el-descriptions-item label="训练开始">{{
+            utc(detail.started_at)
+          }}</el-descriptions-item
+          ><el-descriptions-item label="训练结束">{{
+            utc(detail.finished_at)
+          }}</el-descriptions-item
+          ><el-descriptions-item label="模型文件">{{
+            detail.model?.model_filename || "无"
+          }}</el-descriptions-item
+          ><el-descriptions-item label="权重状态"
+            ><el-tag
+              :type="detail.model?.weight_exists ? 'success' : 'danger'"
+              >{{
+                detail.model?.weight_exists ? "文件存在" : "文件缺失"
+              }}</el-tag
+            ></el-descriptions-item
+          ></el-descriptions
+        >
+        <h4>训练配置</h4>
+        <pre class="json-block">{{
+          JSON.stringify(detail.config, null, 2)
+        }}</pre>
+      </template></el-dialog
+    >
+  </section>
+</template>
+<style scoped>
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.model-grid article {
+  min-width: 0;
+  background: #fff;
+  border: 1px solid var(--app-border);
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.model-grid article > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.model-grid span,
+.model-grid small {
+  color: var(--app-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-grid .el-tag {
+  width: max-content;
+}
+.record-filters {
+  margin-bottom: 16px;
+}
+.record-filters .el-select {
+  width: 170px;
+}
+.protected-text {
+  font-size: 12px;
+  color: #738394;
+}
+@media (max-width: 1300px) {
+  .model-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+</style>

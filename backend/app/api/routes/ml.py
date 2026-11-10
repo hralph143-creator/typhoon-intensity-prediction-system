@@ -17,6 +17,8 @@ from backend.app.services.ml_training import cancel_experiment, create_experimen
 from backend.app.services.safnet_training import predict as safnet_predict, structure_info
 from backend.app.services.analysis_service import comparison_analysis, predictions
 from backend.app.services.fair_comparison import compare_common_test_set
+from backend.app.services.phase10_dataset import audit_multi_horizon
+from backend.app.services.phase10_service import phase10_csv,phase10_predict,phase10_samples,phase10_summary
 
 router = APIRouter(prefix="/ml", tags=["历史强度预测"])
 
@@ -42,6 +44,10 @@ class SAFNetPredictRequest(BaseModel):
     model_id: str
     sample_id: str
     include_attention: bool = False
+
+
+class Phase10PredictRequest(BaseModel):
+    sample_id:str=Field(min_length=1,max_length=64)
 
 
 @router.get("/audit")
@@ -120,6 +126,32 @@ def comparison_detail(): return ok(comparison_analysis())
 
 @router.get("/comparison/common-test")
 def common_test_comparison():return ok(compare_common_test_set())
+
+
+@router.get("/phase10/audit")
+def phase10_audit():
+    try:return ok(audit_multi_horizon())
+    except ValueError as exc:raise HTTPException(409,str(exc))
+
+
+@router.get("/phase10/summary")
+def phase10_results():return ok(phase10_summary())
+
+
+@router.get("/phase10/samples")
+def phase10_sample_list(split:str|None=Query(None,pattern="^(train|validation|test)$")):
+    rows=phase10_samples();return ok([row for row in rows if split is None or row["split"]==split])
+
+
+@router.post("/phase10/predict")
+def phase10_inference(payload:Phase10PredictRequest):
+    try:return ok(phase10_predict(payload.sample_id),"多时效概率历史回测完成")
+    except LookupError as exc:raise HTTPException(404,str(exc))
+    except ValueError as exc:raise HTTPException(409,str(exc))
+
+
+@router.get("/phase10/export.csv")
+def phase10_export():return StreamingResponse(iter([phase10_csv()]),media_type="text/csv",headers={"Content-Disposition":"attachment; filename=phase10-multi-horizon.csv"})
 
 
 @router.get("/predictions")

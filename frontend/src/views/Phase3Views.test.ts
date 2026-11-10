@@ -5,11 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TrainingView from './TrainingView.vue'
 import PredictionView from './PredictionView.vue'
 import EvaluationView from './EvaluationView.vue'
-import { getAudit, getCommonTestComparison, getComparison, getComparisonDetail, getExperiments, getModels, getPredictionRecords, getSafnetInfo, getSafnetSamples, getSampleStatistics } from '@/api/ml'
+import { getAudit, getCommonTestComparison, getComparison, getComparisonDetail, getExperiments, getModels, getPhase10Samples, getPhase10Summary, getPredictionRecords, getSafnetInfo, getSafnetSamples, getSampleStatistics } from '@/api/ml'
 import { getTyphoons } from '@/api/typhoons'
 
 vi.mock('vue-router',()=>({useRoute:()=>({query:{}})}))
-vi.mock('@/api/ml',()=>({getAudit:vi.fn(),getSampleStatistics:vi.fn(),getExperiments:vi.fn(),getExperiment:vi.fn(),createExperiment:vi.fn(),cancelExperiment:vi.fn(),getModels:vi.fn(),historicalPredict:vi.fn(),getComparison:vi.fn(),getComparisonDetail:vi.fn(),getCommonTestComparison:vi.fn(),getPredictionRecords:vi.fn(),getSafnetInfo:vi.fn(),getSafnetSamples:vi.fn(),safnetPredict:vi.fn()}))
+vi.mock('@/api/ml',()=>({getAudit:vi.fn(),getSampleStatistics:vi.fn(),getExperiments:vi.fn(),getExperiment:vi.fn(),createExperiment:vi.fn(),cancelExperiment:vi.fn(),getModels:vi.fn(),historicalPredict:vi.fn(),getComparison:vi.fn(),getComparisonDetail:vi.fn(),getCommonTestComparison:vi.fn(),getPredictionRecords:vi.fn(),getSafnetInfo:vi.fn(),getSafnetSamples:vi.fn(),safnetPredict:vi.fn(),getPhase10Summary:vi.fn(),getPhase10Samples:vi.fn(),phase10Predict:vi.fn()}))
 vi.mock('@/api/typhoons',()=>({getTyphoons:vi.fn(),getTrack:vi.fn()}))
 vi.mock('@/components/DataChart.vue',()=>({default:{props:['label'],template:'<div class="chart">{{label}}</div>'}}))
 
@@ -18,6 +18,7 @@ beforeEach(()=>{
   vi.mocked(getSampleStatistics).mockResolvedValue({quality_profile:'strict',dataset_version:'v',total:8048,splits:{train:{sample_count:6117,event_count:233,years:[2014],wind_min:1,wind_max:2,wind_mean:1},validation:{sample_count:1209,event_count:49,years:[2022],wind_min:1,wind_max:2,wind_mean:1},test:{sample_count:722,event_count:28,years:[2024],wind_min:1,wind_max:2,wind_mean:1},no_sid_leakage:true}})
   vi.mocked(getExperiments).mockResolvedValue([]);vi.mocked(getModels).mockResolvedValue([]);vi.mocked(getComparison).mockResolvedValue([]);vi.mocked(getComparisonDetail).mockResolvedValue({items:[],formal_ranking_allowed:false});vi.mocked(getCommonTestComparison).mockResolvedValue({items:[],status:'experimental',formal_ranking_allowed:false,reason:'测试集未参与训练；共同测试样本不足。',sample_count:0,event_count:0,forecast_horizon_hours:6});vi.mocked(getPredictionRecords).mockResolvedValue({items:[],total:0,page:1,page_size:20})
   vi.mocked(getSafnetInfo).mockResolvedValue({availability:{ready:false,total:0,splits:{train:0,validation:0,test:0}},parameters:{total:180000,trainable:180000},config:{time_features:1},device:'cpu',pipeline:[]});vi.mocked(getSafnetSamples).mockResolvedValue([])
+  vi.mocked(getPhase10Summary).mockResolvedValue({available:false});vi.mocked(getPhase10Samples).mockResolvedValue([])
   vi.mocked(getTyphoons).mockResolvedValue({items:[],total:0,page:1,page_size:100})
 })
 

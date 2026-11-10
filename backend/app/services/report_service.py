@@ -21,8 +21,9 @@ from backend.app.models.typhoon import TyphoonEvent,TyphoonObservation
 from backend.app.services.report_charts import bar_chart,histogram,line_chart,track_chart
 from backend.app.services.report_render import render_html,render_pdf
 from backend.app.services.fair_comparison import compare_common_test_set
+from backend.app.services.phase10_service import phase10_summary
 
-REPORT_TYPES={"typhoon":"历史台风分析报告","model":"模型预测评估报告","comprehensive":"综合科研分析报告"}
+REPORT_TYPES={"typhoon":"历史台风分析报告","model":"模型预测评估报告","comprehensive":"综合科研分析报告","phase10_diagnosis":"SAF-Net 性能诊断报告","phase10_ablation":"SAF-Net 消融实验报告","phase10_multi_horizon":"多时效模型比较报告","phase10_uncertainty":"概率预测与区间校准报告","phase10_comprehensive":"第十阶段综合科研实验报告"}
 _executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix="report")
 
 
@@ -74,6 +75,10 @@ def _comprehensive_snapshot(db)->dict:
 
 
 def snapshot(report_type:str,typhoon_id:int|None=None,experiment_id:str|None=None)->dict:
+    if report_type.startswith("phase10_"):
+        result=phase10_summary()
+        if not result.get("available"):raise ValueError(result.get("message","第十阶段实验尚未运行"))
+        return {"kind":report_type,"source":"CMA 独立最佳路径标签；Copernicus ERA5 U10/V10 历史再分析；第十阶段冻结实验快照","phase10":result}
     with SessionLocal() as db:
         if report_type=="typhoon":
             if not typhoon_id:raise ValueError("历史台风报告必须选择台风")
@@ -85,7 +90,34 @@ def snapshot(report_type:str,typhoon_id:int|None=None,experiment_id:str|None=Non
     raise ValueError("不支持的报告类型")
 
 
+def _phase10_sections(data:dict,folder:Path)->list[dict]:
+    p=data["phase10"];audit=p["audit"];candidate=p["selected_candidate"];test=candidate["test"];horizons=[6,12,18,24]
+    split_rows=[]
+    for split,value in audit["splits"].items():
+        split_rows.append([split,value["samples"],value["events"]," / ".join(str(value["horizons"][str(h)]["samples"]) for h in horizons)])
+    base_rows=[]
+    for name,value in p["baselines"].items():
+        if name=="legacy_safnet":continue
+        overall=value["test"]["overall"];base_rows.append([name.upper(),f"{overall['mae']:.4f}",f"{overall['rmse']:.4f}",f"{overall['bias']:.4f}"])
+    base_rows.append(["候选 SAF-Net",f"{test['overall']['mae']:.4f}",f"{test['overall']['rmse']:.4f}",f"{test['overall']['bias']:.4f}"])
+    ablation_rows=[[x["variant"],x["seed"],x["parameters"],x["best_epoch"],f"{x['validation']['overall']['mae']:.4f}",f"{x['test']['overall']['mae']:.4f}"] for x in p["selected_ablations"]]
+    probability_rows=[]
+    for h in horizons:
+        point=test["by_horizon"][str(h)];prob=test["probability"]["by_horizon"][str(h)];boot=p["bootstrap_candidate_minus_persistence"][str(h)]
+        probability_rows.append([h,point["sample_count"],f"{point['mae']:.4f}",f"{point['rmse']:.4f}",f"{prob['coverage_p10_p90']*100:.1f}%",f"{prob['mean_interval_width']:.4f}",f"{prob['pinball_loss']:.4f}",f"[{boot['ci95'][0]:.3f}, {boot['ci95'][1]:.3f}]"])
+    metric=folder/"phase10-mae.png";coverage=folder/"phase10-coverage.png"
+    images=[{"path":str(metric),"data":line_chart(metric,[str(h) for h in horizons],[("Persistence",[p["baselines"]["persistence"]["test"]["by_horizon"][str(h)]["mae"] for h in horizons]),("Ridge",[p["baselines"]["ridge"]["test"]["by_horizon"][str(h)]["mae"] for h in horizons]),("GRU",[p["baselines"]["gru"]["test"]["by_horizon"][str(h)]["mae"] for h in horizons]),("候选 SAF-Net",[test["by_horizon"][str(h)]["mae"] for h in horizons])],"多时效测试集 MAE","m/s"),"caption":"相同多时效测试样本上的点预测误差"},{"path":str(coverage),"data":line_chart(coverage,[str(h) for h in horizons],[("P10–P90 覆盖率",[test["probability"]["by_horizon"][str(h)]["coverage_p10_p90"]*100 for h in horizons]),("名义覆盖率",[80]*4)],"预测区间覆盖率","%"),"caption":"测试集区间覆盖率与 80% 名义值"}]
+    common=[{"title":"1　数据版本与审计","paragraphs":[f"数据版本：{p['dataset_version']}；清单 SHA-256：{p['manifest_sha256']}。",f"共 {audit['total_samples']} 个时空窗口、{audit['total_events']} 个独立台风事件。SID 跨分区泄漏：{'无' if audit['no_sid_leakage'] else '存在'}；未来 ERA5 输入：{'未使用' if not audit['future_inputs_used'] else '存在'}。"],"table":(["分区","窗口","事件","6/12/18/24h 标签数"],split_rows),"table_caption":"按事件隔离的多时效数据覆盖"},{"title":"2　模型选择与总体结果","paragraphs":[f"候选模型为 {candidate['variant']}（seed={candidate['seed']}），只按验证集四时效平均 MAE 选择；测试集未参与选择。",f"候选测试总体 MAE {test['overall']['mae']:.4f} m/s，未超过 Persistence。该负面结果被完整保留。"],"table":(["模型","MAE","RMSE","Bias"],base_rows),"table_caption":"多时效测试集总体指标","images":images}]
+    kind=data["kind"]
+    if kind=="phase10_diagnosis":return common+[{"title":"3　训练与稳定性诊断","paragraphs":[f"权重重载最大预测差：{p['diagnostics']['reload_max_difference']:.8f}；标准化仅拟合训练集；最佳 Epoch 仅由验证集决定。",*p["diagnostics"]["limitations"]],"table":(["变体","验证 MAE 均值","随机种子标准差"],[[k,f"{v['validation_mae_mean']:.4f}",f"{v['validation_mae_std']:.4f}"] for k,v in p["diagnostics"]["seed_stability"].items()]),"table_caption":"三随机种子稳定性"}]
+    if kind=="phase10_ablation":return common+[{"title":"3　消融实验","paragraphs":["每个结构均使用完全相同的数据划分、损失、评价函数和三个预先固定的随机种子。表中的测试指标仅在各变体按验证集完成选择后计算。"],"table":(["结构","种子","参数量","最佳 Epoch","验证 MAE","测试 MAE"],ablation_rows),"table_caption":"六组 SAF-Net 消融结果"}]
+    if kind=="phase10_uncertainty":return common+[{"title":"3　概率预测与校准","paragraphs":["模型同时输出 P10、P50、P90，使用掩码 Pinball Loss；单调参数化保证分位数不交叉。测试覆盖率低于名义 80%，说明区间存在欠校准。"],"table":(["时效(h)","样本","MAE","RMSE","覆盖率","区间宽度","Pinball","MAE差值95%CI"],probability_rows),"table_caption":"分时效概率评价"}]
+    if kind=="phase10_multi_horizon":return common+[{"title":"3　分时效评价","paragraphs":["四个预测时效均只使用 t 及之前的四时次输入。所有时效在验证集和测试集均覆盖 6 个独立事件，可进行当前数据范围内的正式比较。"],"table":(["时效(h)","样本","MAE","RMSE","覆盖率","区间宽度","Pinball","MAE差值95%CI"],probability_rows),"table_caption":"6–24 小时测试结果"}]
+    return common+[{"title":"3　六组结构消融","table":(["结构","种子","参数量","最佳 Epoch","验证 MAE","测试 MAE"],ablation_rows),"table_caption":"验证集选模后的独立测试"},{"title":"4　概率预测与统计不确定性","table":(["时效(h)","样本","MAE","RMSE","覆盖率","区间宽度","Pinball","MAE差值95%CI"],probability_rows),"table_caption":"分时效概率评价"},{"title":"5　结论与限制","paragraphs":["当前候选 SAF-Net 没有超过持续性基线；所有 Bootstrap 置信区间均跨越 0，不能宣称存在统计显著优势。","测试集只有 6 个独立事件，ERA5 输入仅含 U10/V10；结果属于历史再分析回测，不构成实时业务预报。","失败实验、负面结果和欠校准区间均按原始结果报告。"]}]
+
+
 def _sections(data:dict,folder:Path)->list[dict]:
+    if data["kind"].startswith("phase10_"):return _phase10_sections(data,folder)
     if data["kind"]=="typhoon":
         event=data["event"];rows=data["observations"];times=[x["time"] for x in rows];valid_wind=[x for x in rows if x["cma_wind_ms"] is not None];valid_pressure=[x for x in rows if x["cma_pressure"] is not None]
         images=[];track=folder/"track.png";images.append({"path":str(track),"data":track_chart(track,[x["longitude"] for x in rows],[x["latitude"] for x in rows],f"{event['name']} 历史轨迹"),"caption":"历史 MAIN 轨迹（经纬度）","ratio":.72})
